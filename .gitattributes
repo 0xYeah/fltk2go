@@ -1,12 +1,9 @@
-* text=auto
+# 全仓：自动识别文本/二进制；文本统一 LF
+* text=auto eol=lf
 
-fltk_bridge/** text eol=lf
-fltk_build/** text eol=lf
-core/** text eol=lf
-build/** text eol=lf
-lib/** text eol=lf
-*.go text eol=lf
-*.h  text eol=lf
-*.c  text eol=lf
-*.cc text eol=lf
-*.mm text eol=lf
+# lib/include：明确当文本（可选，但更稳）
+lib/include/** text eol=lf
+
+# lib/<os>/<arch>：全部当二进制（放行，不做 EOL 转换）
+lib/*/*/** -text
+

@@ -3,9 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"github.com/0xYeah/fltk2go/config"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/0xYeah/fltk2go/config"
 )
 
 // =======================
@@ -297,18 +299,53 @@ func runCMakeInstall(ctx *buildCtx) {
 // =======================
 // post install
 // =======================
+func normalizeTextLF(path string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Printf("Error reading %s, %v\n", path, err)
+		os.Exit(1)
+	}
+
+	// CRLF -> LF
+	b2 := bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+	// stray CR -> LF
+	b2 = bytes.ReplaceAll(b2, []byte("\r"), []byte("\n"))
+
+	// 内容没变就不写回
+	if bytes.Equal(b, b2) {
+		return
+	}
+
+	if err := os.WriteFile(path, b2, 0644); err != nil {
+		fmt.Printf("Error writing %s, %v\n", path, err)
+		os.Exit(1)
+	}
+}
+
 func moveFileCrossPlatform(src, dst string) {
+	// 源必须存在
+	st, err := os.Stat(src)
+	if err != nil {
+		fmt.Printf("Error stating %s, %v\n", src, err)
+		os.Exit(1)
+	}
+	if st.IsDir() {
+		fmt.Printf("Error: %s is a directory, expected file\n", src)
+		os.Exit(1)
+	}
+
+	// 目标若存在，明确覆盖：先删
+	_ = os.Remove(dst)
+
+	// 确保目标目录存在
+	mustMkdirAll(filepath.Dir(dst), 0750)
+
 	// 先尝试 Rename（同盘最快）
 	if err := os.Rename(src, dst); err == nil {
 		return
 	}
 
 	// Rename 失败则 copy + remove
-	st, err := os.Stat(src)
-	if err != nil {
-		fmt.Printf("Error stating %s, %v\n", src, err)
-		os.Exit(1)
-	}
 	copyFile(src, dst, st.Mode().Perm())
 	if err := os.Remove(src); err != nil {
 		fmt.Printf("Error removing %s, %v\n", src, err)
@@ -316,14 +353,64 @@ func moveFileCrossPlatform(src, dst string) {
 	}
 }
 
+func detectFltkConfigHeader(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fmt.Printf("Cannot read dir: %s, %v\n", dir, err)
+		os.Exit(1)
+	}
+
+	var candidates []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		ln := strings.ToLower(name)
+		if strings.Contains(ln, "config") && strings.HasSuffix(ln, ".h") {
+			candidates = append(candidates, name)
+		}
+	}
+
+	if len(candidates) == 0 {
+		fmt.Printf("No FLTK config header found in %s\n", dir)
+		os.Exit(1)
+	}
+	if len(candidates) > 1 {
+		sort.Strings(candidates)
+		fmt.Printf("Multiple possible FLTK config headers in %s: %v\n", dir, candidates)
+		os.Exit(1)
+	}
+
+	return candidates[0]
+}
+
 func moveFlConfigHeader(ctx *buildCtx) {
 	targetDir := filepath.Join(ctx.libdir, "FL")
 	mustMkdirAll(targetDir, 0750)
 
-	src := filepath.Join(ctx.includeDir, "FL", "fl_config.h")
-	dst := filepath.Join(targetDir, "fl_config.h")
+	srcDir := filepath.Join(ctx.includeDir, "FL")
+	cfg := detectFltkConfigHeader(srcDir)
+
+	src := filepath.Join(srcDir, cfg)
+	dst := filepath.Join(ctx.libdir, "FL", cfg)
+
+	// 源文件必须存在（否则 install 没产出，直接 fail-fast）
+	if _, err := os.Stat(src); err != nil {
+		fmt.Printf("Error: fl_config.h not found: %s, %v\n", src, err)
+		os.Exit(1)
+	}
 
 	moveFileCrossPlatform(src, dst)
+
+	// 核心需求：统一 LF
+	normalizeTextLF(dst)
+
+	// 可选：再确认 dst 存在
+	if _, err := os.Stat(dst); err != nil {
+		fmt.Printf("Error: fl_config.h not created: %s, %v\n", dst, err)
+		os.Exit(1)
+	}
 }
 
 // =======================
@@ -560,7 +647,7 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 	srcCfg := filepath.Join(arm64Dir, "FL", "fl_config.h")
 	dstCfg := filepath.Join(universalDir, "FL", "fl_config.h")
 	copyFile(srcCfg, dstCfg, 0644)
-
+	normalizeTextLF(dstCfg)
 	fmt.Println("macOS universal merge completed")
 }
 
@@ -621,6 +708,19 @@ func orderedFltkStaticLibs(relLibArch string) []string {
 	return libs
 }
 
+func cleanStagingInstall(ctx *buildCtx) {
+	// 只清理本次目标会写入的路径，避免误删其他平台的产物
+	_ = os.RemoveAll(filepath.Join(ctx.outputRoot, "include"))
+	_ = os.RemoveAll(filepath.Join(ctx.outputRoot, "lib", ctx.goos, ctx.outArch))
+}
+
+func mustFileExist(path string) {
+	if _, err := os.Stat(path); err != nil {
+		fmt.Printf("Missing required file: %s, %v\n", path, err)
+		os.Exit(1)
+	}
+}
+
 // =======================
 // main
 // =======================
@@ -643,6 +743,8 @@ func main() {
 
 	runCMakeConfigure(ctx)
 	runCMakeBuild(ctx)
+	// 在 install 之前先清 staging，确保 cmake --install 输出没有旧文件残留
+	cleanStagingInstall(ctx)
 	runCMakeInstall(ctx)
 
 	// staging 内处理 fl_config.h
@@ -659,6 +761,10 @@ func main() {
 	if ctx.goos == "darwin" && ctx.outArch == "universal" {
 		writeManifestForTarget(ctx, "darwin", "universal")
 	}
+
+	// 同步后确认 fl_config.h 确实在最终位置
+	mustFileExist(filepath.Join("lib", ctx.goos, ctx.outArch, "FL", "fl_config.h"))
+
 	// cgo 永远基于最终 lib/<os>/<arch> 或 lib/<os>/universal
 	generateCgo(ctx)
 

@@ -1,4 +1,4 @@
-#include "fltk_bridge.h"
+#include "fltk.h"
 
 #include <FL/Fl.H>
 
