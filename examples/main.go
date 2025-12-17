@@ -1,9 +1,12 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/0xYeah/fltk2go"
-	"github.com/0xYeah/fltk2go/core"
-	"github.com/0xYeah/fltk2go/window"
+	"github.com/0xYeah/fltk2go/runtime"
+	"github.com/0xYeah/fltk2go/ui/core"
+	"github.com/0xYeah/fltk2go/ui/window"
 )
 
 // FLTK uses an RGBI color representation, the I is an index into FLTK's color map
@@ -16,18 +19,46 @@ const WIDTH = 600
 const HEIGHT = 400
 
 func main() {
-	// 创建窗口
-	w := window.NewWindow(core.Frame{0.0,0,1024,768} "Hello fltk2go")
-	w.CenterScreen()
+	afm := &core.Frame{
+		0.0,
+		0,
+		1024,
+		768,
+	}
+	curr := 0
+	core.InitStyles()
 
-	// 创建按钮
-	btn := button.New(20, 20, 200, 40, "Hello World")
-	btn.SetCallback(func() {
-		fltk2go.Message("Hello, FLTK + Go 👋")
+	win := window.NewWindow(afm, "flutter like example")
+	//win.SetLabel("flutter like example")
+	win.SetColor(fltk_go.WHITE)
+	bar := fltk_go.NewBox(fltk_go.FLAT_BOX, 0, 0, WIDTH, 60, "    FLTK App!")
+	bar.SetDrawHandler(func(baseDraw func()) { // Shadow under the bar
+		fltk_go.DrawBox(fltk_go.FLAT_BOX, 0, 0, WIDTH, 63, LIGHT_GRAY)
+		baseDraw()
 	})
-
-	w.Add(btn)
-	w.Show()
+	bar.SetAlign(fltk_go.ALIGN_INSIDE | fltk_go.ALIGN_LEFT)
+	bar.SetLabelColor(255) // this uses the index into the color map, here it's white
+	bar.SetColor(BLUE)
+	bar.SetLabelSize(22)
+	text := fltk_go.NewBox(fltk_go.NO_BOX, 250, 180, 100, 40, "You have pushed the button this many times:")
+	text.SetLabelSize(18)
+	text.SetLabelFont(fltk_go.TIMES)
+	count := fltk_go.NewBox(fltk_go.NO_BOX, 250, 180+40, 100, 40, "0")
+	count.SetLabelSize(36)
+	count.SetLabelColor(GRAY)
+	btn := fltk_go.NewButton(WIDTH-100, HEIGHT-100, 60, 60, "@+6plus") // this translates into a plus sign
+	btn.SetColor(BLUE)
+	btn.SetSelectionColor(SEL_BLUE)
+	btn.SetLabelColor(255)
+	btn.SetBox(fltk_go.OFLAT_BOX)
+	btn.ClearVisibleFocus()
+	btn.SetCallback(func() {
+		curr += 1
+		count.SetLabel(strconv.Itoa(curr))
+	})
+	win.End()
+	win.Show()
+	fltk_go.Run()
 
 	// 进入事件循环
 	fltk2go.Run()

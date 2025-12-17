@@ -1,8 +1,20 @@
 package fltk2go
 
+import "C"
 import (
 	"github.com/0xYeah/fltk2go/config"
+	"github.com/0xYeah/fltk2go/fltk_bridge"
 )
+
+func Run() int {
+	return fltk_bridge.Run()
+}
+func Lock() bool {
+	return fltk_bridge.Lock()
+}
+func Unlock() {
+	fltk_bridge.Unlock()
+}
 
 // FltkVersion [☑]Option
 /*
