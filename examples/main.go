@@ -4,62 +4,37 @@ import (
 	"strconv"
 
 	"github.com/0xYeah/fltk2go"
-	"github.com/0xYeah/fltk2go/runtime"
-	"github.com/0xYeah/fltk2go/ui/core"
-	"github.com/0xYeah/fltk2go/ui/window"
+	"github.com/0xYeah/fltk2go/foundation"
+	uibutton "github.com/0xYeah/fltk2go/uikit/button"
+	uilabel "github.com/0xYeah/fltk2go/uikit/label"
+	uiwindow "github.com/0xYeah/fltk2go/uikit/window"
 )
 
-// FLTK uses an RGBI color representation, the I is an index into FLTK's color map
-// Passing 00 as I will use the RGB part of the value
-const GRAY = 0x75757500
-const LIGHT_GRAY = 0xeeeeee00
-const BLUE = 0x42A5F500
-const SEL_BLUE = 0x2196F300
-const WIDTH = 600
-const HEIGHT = 400
+const (
+	BLUE uint = 0x42A5F500
+	GRAY uint = 0x75757500
+)
 
 func main() {
-	afm := &core.Frame{
-		0.0,
-		0,
-		1024,
-		768,
-	}
-	curr := 0
-	core.InitStyles()
+	win := uiwindow.NewUIWindow(&foundation.Rect{X: 50, Y: 50, Width: 600, Height: 400}, "Counter")
+	root := win.RootView()
 
-	win := window.NewWindow(afm, "flutter like example")
-	//win.SetLabel("flutter like example")
-	win.SetColor(fltk_go.WHITE)
-	bar := fltk_go.NewBox(fltk_go.FLAT_BOX, 0, 0, WIDTH, 60, "    FLTK App!")
-	bar.SetDrawHandler(func(baseDraw func()) { // Shadow under the bar
-		fltk_go.DrawBox(fltk_go.FLAT_BOX, 0, 0, WIDTH, 63, LIGHT_GRAY)
-		baseDraw()
+	title := uilabel.NewUILabel(&foundation.Rect{X: 20, Y: 20, Width: 560, Height: 40}, "你点击了 0 次")
+	title.SetFontSize(20)
+	title.SetTextColor(GRAY)
+
+	btn := uibutton.NewUIButton(&foundation.Rect{X: 20, Y: 80, Width: 160, Height: 44}, "点我 +1")
+	btn.SetBackgroundColor(BLUE)
+
+	count := 0
+	btn.OnTouchUpInside(func() {
+		count++
+		title.SetText("你点击了 " + strconv.Itoa(count) + " 次")
 	})
-	bar.SetAlign(fltk_go.ALIGN_INSIDE | fltk_go.ALIGN_LEFT)
-	bar.SetLabelColor(255) // this uses the index into the color map, here it's white
-	bar.SetColor(BLUE)
-	bar.SetLabelSize(22)
-	text := fltk_go.NewBox(fltk_go.NO_BOX, 250, 180, 100, 40, "You have pushed the button this many times:")
-	text.SetLabelSize(18)
-	text.SetLabelFont(fltk_go.TIMES)
-	count := fltk_go.NewBox(fltk_go.NO_BOX, 250, 180+40, 100, 40, "0")
-	count.SetLabelSize(36)
-	count.SetLabelColor(GRAY)
-	btn := fltk_go.NewButton(WIDTH-100, HEIGHT-100, 60, 60, "@+6plus") // this translates into a plus sign
-	btn.SetColor(BLUE)
-	btn.SetSelectionColor(SEL_BLUE)
-	btn.SetLabelColor(255)
-	btn.SetBox(fltk_go.OFLAT_BOX)
-	btn.ClearVisibleFocus()
-	btn.SetCallback(func() {
-		curr += 1
-		count.SetLabel(strconv.Itoa(curr))
-	})
-	win.End()
+
+	root.AddSubview(title)
+	root.AddSubview(btn)
+
 	win.Show()
-	fltk_go.Run()
-
-	// 进入事件循环
 	fltk2go.Run()
 }

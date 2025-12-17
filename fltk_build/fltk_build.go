@@ -575,7 +575,7 @@ func copyDir(srcDir, dstDir string) {
 
 func syncArtifactsToProjectRoot(ctx *buildCtx) {
 	// 目标：项目根（固定）
-	finalRoot := "."
+	finalRoot := projectRoot()
 
 	// 1) include
 	srcInclude := filepath.Join(ctx.outputRoot, "include")
@@ -721,6 +721,29 @@ func mustFileExist(path string) {
 	}
 }
 
+func projectRoot() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("cannot get working directory:", err)
+		os.Exit(1)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+			if _, err := os.Stat(filepath.Join(wd, "fltk_bridge")); err == nil {
+				return wd
+			}
+		}
+
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			fmt.Println("cannot locate fltk2go project root")
+			os.Exit(1)
+		}
+		wd = parent
+	}
+}
+
 // =======================
 // main
 // =======================
@@ -728,6 +751,9 @@ func main() {
 	mustCheckEnv()
 	mustCheckTool("git")
 	mustCheckTool("cmake")
+
+	root := projectRoot()
+	_ = os.Chdir(root) // ⭐ 核心修复点：统一工作目录
 
 	ctx := newBuildCtx()
 

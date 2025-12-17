@@ -2,6 +2,7 @@ package colors
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/0xYeah/fltk2go/fltk_bridge"
 )
@@ -49,14 +50,77 @@ type Color struct {
 	ColorName string // optional, for display
 }
 
-// ColorWithRGB creates a custom color from RGB values.
-func ColorWithRGB(r, g, b uint8) Color {
-	return Color{
-		Rgb:       packRGB(r, g, b),
-		RgbHex:    rgbToHex(r, g, b),
-		RgbStr:    rgbToStr(r, g, b),
-		ColorName: "rgb",
+// ColorWithRGB supports multiple input forms while keeping a single exported API.
+//
+// Supported:
+//   - ColorWithRGB(uint8,uint8,uint8)
+//   - ColorWithRGB(int,int,int) / uint/uint8 混用也可以（会 clamp 到 0~255）
+//   - ColorWithRGB("#RGB" / "#RGBA" / "#RRGGBB" / "#RRGGBBAA")
+//   - ColorWithRGB("0xRRGGBB" / "0xRRGGBBAA")
+//   - ColorWithRGB("RRGGBB" / "RRGGBBAA")
+//   - ColorWithRGB("rgb(r,g,b)" / "rgba(r,g,b,a)")
+//   - ColorWithRGB("r,g,b" / "r,g,b,a")
+func ColorWithRGB(args ...any) Color {
+	// default white
+	def := Color{Rgb: packRGB(255, 255, 255), RgbHex: rgbToHex(255, 255, 255), RgbStr: rgbToStr(255, 255, 255), ColorName: "rgb"}
+
+	// 1) (r,g,b) 或 (r,g,b,a)
+	if len(args) == 3 || len(args) == 4 {
+		r, ok := toByte(args[0])
+		if !ok {
+			return def
+		}
+		g, ok := toByte(args[1])
+		if !ok {
+			return def
+		}
+		b, ok := toByte(args[2])
+		if !ok {
+			return def
+		}
+		// 第 4 个 alpha 允许传入，但 Color 结构不存 alpha（最小化改动）；你将来要用再扩展结构即可
+		return Color{Rgb: packRGB(r, g, b), RgbHex: rgbToHex(r, g, b), RgbStr: rgbToStr(r, g, b), ColorName: "rgb"}
 	}
+
+	// 2) 单参数：string 或 整数 0xRRGGBB/0xRRGGBBAA
+	if len(args) == 1 {
+		switch v := args[0].(type) {
+		case string:
+			if c, ok := parseColorString(v); ok {
+				return c
+			}
+			// 也允许走你现有的命名色（不额外暴露任何 API）
+			return colorByName(strings.ToLower(strings.TrimSpace(v)))
+		case uint:
+			if c, ok := parseColorUint64(uint64(v)); ok {
+				return c
+			}
+		case uint32:
+			if c, ok := parseColorUint64(uint64(v)); ok {
+				return c
+			}
+		case uint64:
+			if c, ok := parseColorUint64(v); ok {
+				return c
+			}
+		case int:
+			if v < 0 {
+				return def
+			}
+			if c, ok := parseColorUint64(uint64(v)); ok {
+				return c
+			}
+		case int64:
+			if v < 0 {
+				return def
+			}
+			if c, ok := parseColorUint64(uint64(v)); ok {
+				return c
+			}
+		}
+	}
+
+	return def
 }
 
 func rgbToStr(r, g, b uint8) string {
