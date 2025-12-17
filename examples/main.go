@@ -1,6 +1,8 @@
 package main
 
 import (
+	_ "embed"
+	"runtime"
 	"strconv"
 
 	"github.com/0xYeah/fltk2go"
@@ -15,7 +17,15 @@ const (
 	GRAY uint = 0x75757500
 )
 
+//go:embed resources/imgs/Icon.png
+var Icon []byte
+
 func main() {
+	// 将当前 goroutine 绑定到当前操作系统线程。
+	// 对于 Win32 / OpenGL / GDI+ 等具有线程亲和性的系统或 C/C++ API，这是必须的。
+	// 防止 goroutine 被调度到其他 OS 线程，导致 GUI / 图形上下文失效或异常。
+	runtime.LockOSThread()
+
 	win := uiwindow.NewUIWindow(&foundation.Rect{X: 50, Y: 50, Width: 600, Height: 400}, "Counter")
 	root := win.RootView()
 

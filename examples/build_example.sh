@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR_NAME="$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
 product_name=$(grep ProjectName ../config/config.go | awk -F '"' '{print $2}' | sed 's/\"//g')
+product_name="${product_name}_${SCRIPT_DIR_NAME}"
 Product_version_key="ProjectVersion"
 VersionFile=../config/config.go
 CURRENT_VERSION=$(grep ${Product_version_key} $VersionFile | awk -F '"' '{print $2}' | sed 's/\"//g')
@@ -101,26 +103,23 @@ function toBuild() {
             package_linux_binary_files
         fi
     elif [[ "$OS_TYPE" == "Windows" ]]; then
-        mkdir -p ${build_path}/${RUN_MODE}/windows/amd64
 
-        if [ ! -f ./favicon.ico ]; then
-          echo "Generating favicon.ico"
-          magick ./resources/imgs/Icon.png -strip -depth 8 -type TrueColor -compress None -define icon:auto-resize=256,128,64,32,16 ./favicon.ico
-        fi
+      # Build for Windows x64
+      mkdir -p ${build_path}/${RUN_MODE}/windows/amd64
 
-        generate_windows_package_file
+      generate_windows_package_file
 
-        windres -i main.rc -o main.syso -O coff
+      # x86_64-w64-mingw32-windres -i main.rc -o main.syso -O coff
+      windres -i main.rc -o main.syso -O coff
+      CGO_LDFLAGS="-static -static-libgcc -static-libstdc++ -lglu32 -lopengl32 -lgdiplus -lole32 -luuid -lcomctl32 -lws2_32 -lmsvcrt"
 
-        CGO_LDFLAGS="-static -static-libgcc -static-libstdc++ -lglu32 -lopengl32 -lgdiplus -lole32 -luuid -lcomctl32 -lws2_32 -lmsvcrt"
+      CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CGO_LDFLAGS=$CGO_LDFLAGS go build -a -trimpath -ldflags "${ld_flag_master} -H windowsgui -w -s" -o ${build_path}/${RUN_MODE}/windows/amd64/${product_name}.exe
+      chmod a+x ${build_path}/${RUN_MODE}/windows/amd64/${product_name}.exe
 
-        CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CGO_LDFLAGS=$CGO_LDFLAGS go build -a -trimpath -ldflags "${ld_flag_master} -H windowsgui -w -s" -o ${build_path}/${RUN_MODE}/windows/amd64/${product_name}.exe
-        chmod a+x ${build_path}/${RUN_MODE}/windows/amd64/${product_name}.exe
+      rm -rf ./main.rc
+      rm -rf ./main.syso
 
-        rm -rf ./main.rc
-        rm -rf ./main.syso
-
-        package_windows_files "amd64"
+      package_windows_files "amd64"
     fi
 }
 
@@ -179,21 +178,57 @@ BEGIN
 END
 EOL
 }
+
 function package_windows_files() {
 
-    if [[ "$OS_TYPE" == "Windows" ]]; then
-        cd ${build_path}/${RUN_MODE}/windows/amd64
-        mkdir -p ${product_name}
-        mv ${product_name}.exe ./${product_name}/
-#        zip -r ./${product_name}_${RUN_MODE}_${CURRENT_VERSION}_linux_amd64.zip ./${product_name}
-        7z a ./${product_name}_${RUN_MODE}_${CURRENT_VERSION}_windows_amd64.zip ./${product_name} >/dev/null 2>&1
-        mv ./${product_name}_${RUN_MODE}_${CURRENT_VERSION}_windows_amd64.zip ../../../${UPLOAD_TMP_DIR}
-        cd ../../../../
-    else
+    if [[ "$OS_TYPE" != "Windows" ]]; then
         return
     fi
 
+    set -e
+
+    cd "${build_path}/${RUN_MODE}/windows/amd64"
+
+    mkdir -p "${product_name}"
+    mv "${product_name}.exe" "./${product_name}/"
+
+    pkg_name="${product_name}_${RUN_MODE}_${CURRENT_VERSION}_windows_amd64.zip"
+    pkg_path="./${pkg_name}"
+
+    echo "[package] Packaging Windows files: ${pkg_name}"
+
+    # ----------------------------
+    # 1) Fallback to zip
+    # ----------------------------
+    if command -v zip >/dev/null 2>&1; then
+        echo "[package] Using zip"
+        zip -r "${pkg_path}" "./${product_name}" >/dev/null
+    # ----------------------------
+    # 2) Prefer 7z
+    # ----------------------------
+    elif command -v 7z >/dev/null 2>&1; then
+        echo "[package] Using 7z"
+        7z a "${pkg_path}" "./${product_name}" >/dev/null
+    # ----------------------------
+    # 3) Final fallback: PowerShell Compress-Archive
+    # ----------------------------
+    else
+        echo "[package] 7z/zip not found, using PowerShell Compress-Archive"
+
+        powershell.exe -NoProfile -NonInteractive -Command "
+            \$ErrorActionPreference = 'Stop'
+            Compress-Archive -Path '${product_name}' -DestinationPath '${pkg_path}' -Force
+        "
+    fi
+
+    mkdir -p "../../../${UPLOAD_TMP_DIR}"
+    mv "${pkg_path}" "../../../${UPLOAD_TMP_DIR}"
+
+    cd ../../../../
+
+    echo "[package] Windows package created: ${UPLOAD_TMP_DIR}/${pkg_name}"
 }
+
 
 function package_macos_app() {
     local build_dir="$1"

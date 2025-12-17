@@ -485,7 +485,10 @@ func generateCgo(ctx *buildCtx) {
 	fmt.Fprintf(f, "// #cgo %s,%s CXXFLAGS: -std=c++11\n", ctx.goos, ctx.goarch)
 
 	// 静态库：你原来那套固定顺序（这里用新的 relLibArch）
-	libs := orderedFltkStaticLibs(filepath.ToSlash(filepath.Join("lib", ctx.goos, ctx.outArch)))
+	checkDir := filepath.ToSlash(filepath.Join("lib", ctx.goos, ctx.outArch))      // 用于 os.ReadDir：不带 ..
+	emitRel := filepath.ToSlash(filepath.Join("..", "lib", ctx.goos, ctx.outArch)) // 写入 cgo：带 ..
+	libs := orderedFltkStaticLibs(checkDir, emitRel)
+
 	// ↑ orderedFltkStaticLibs 期望的是相对“项目根”的 lib/<os>/<arch>，
 	//   它内部用 os.ReadDir(baseDir) 读取实际目录，所以传 "lib/..." 不要带 ".."。
 	libFlags := strings.Join(libs, " ")
@@ -575,7 +578,7 @@ func copyDir(srcDir, dstDir string) {
 
 func syncArtifactsToProjectRoot(ctx *buildCtx) {
 	// 目标：项目根（固定）
-	finalRoot := projectRoot()
+	finalRoot := "."
 
 	// 1) include
 	srcInclude := filepath.Join(ctx.outputRoot, "include")
@@ -651,8 +654,7 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 	fmt.Println("macOS universal merge completed")
 }
 
-func orderedFltkStaticLibs(relLibArch string) []string {
-	// 旧版固定顺序（你原先手写的那套）
+func orderedFltkStaticLibs(checkDirFromProjectRoot, emitRelFromSRCDIR string) []string {
 	ordered := []string{
 		"libfltk_images.a",
 		"libfltk_jpeg.a",
@@ -663,14 +665,15 @@ func orderedFltkStaticLibs(relLibArch string) []string {
 		"libfltk.a",
 	}
 
-	baseDir := filepath.FromSlash(relLibArch)
+	// 1) 检查用：项目根下的真实目录（不带 ..）
+	baseDir := filepath.FromSlash(checkDirFromProjectRoot)
 
-	// 先收集目录里所有 libfltk*.a（用于兜底追加）
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		fmt.Printf("Error reading %s, %v\n", baseDir, err)
 		os.Exit(1)
 	}
+
 	allSet := map[string]bool{}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -682,18 +685,19 @@ func orderedFltkStaticLibs(relLibArch string) []string {
 		}
 	}
 
-	// 按固定顺序取；缺任何一个直接报错（避免静默生成坏 cgo）
+	// 2) 输出用：写入 cgo 的相对路径（允许带 ..）
+	emitRel := filepath.ToSlash(emitRelFromSRCDIR)
+
 	var libs []string
 	for _, name := range ordered {
 		if !allSet[name] {
 			fmt.Printf("Missing required static lib: %s (dir: %s)\n", name, baseDir)
 			os.Exit(1)
 		}
-		libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(relLibArch, name)))
+		libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(emitRel, name)))
 		delete(allSet, name)
 	}
 
-	// 兜底：如果未来 FLTK 新增 libfltk_xxx.a，追加到末尾（稳定且不破坏旧顺序）
 	if len(allSet) > 0 {
 		var extra []string
 		for name := range allSet {
@@ -701,7 +705,7 @@ func orderedFltkStaticLibs(relLibArch string) []string {
 		}
 		sort.Strings(extra)
 		for _, name := range extra {
-			libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(relLibArch, name)))
+			libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(emitRel, name)))
 		}
 	}
 
@@ -721,29 +725,6 @@ func mustFileExist(path string) {
 	}
 }
 
-func projectRoot() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("cannot get working directory:", err)
-		os.Exit(1)
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
-			if _, err := os.Stat(filepath.Join(wd, "fltk_bridge")); err == nil {
-				return wd
-			}
-		}
-
-		parent := filepath.Dir(wd)
-		if parent == wd {
-			fmt.Println("cannot locate fltk2go project root")
-			os.Exit(1)
-		}
-		wd = parent
-	}
-}
-
 // =======================
 // main
 // =======================
@@ -751,9 +732,6 @@ func main() {
 	mustCheckEnv()
 	mustCheckTool("git")
 	mustCheckTool("cmake")
-
-	root := projectRoot()
-	_ = os.Chdir(root) // ⭐ 核心修复点：统一工作目录
 
 	ctx := newBuildCtx()
 

@@ -1,11 +1,16 @@
 module examples
 
-go 1.25.5
+go 1.24
+
 
 require (
 	github.com/0xYeah/fltk2go v0.0.1
-	github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71
-	github.com/yuin/goldmark v1.7.8
+	github.com/gen2brain/shm v0.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/jezek/xgb v1.1.1 // indirect
+	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
+	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
+	golang.org/x/sys v0.24.0 // indirect
 )
 
 replace github.com/0xYeah/fltk2go => ../

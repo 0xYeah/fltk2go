@@ -3,6 +3,7 @@ package window
 import (
 	"github.com/0xYeah/fltk2go/fltk_bridge"
 	"github.com/0xYeah/fltk2go/foundation"
+	"github.com/0xYeah/fltk2go/uikit/screen"
 	"github.com/0xYeah/fltk2go/uikit/view"
 )
 
@@ -25,6 +26,9 @@ func NewUIWindow(rect *foundation.Rect, title string) *UIWindow {
 
 	win := fltk_bridge.NewWindowWithPosition(rect.X, rect.Y, rect.Width, rect.Height, title)
 
+	sSize := screen.GetScreenSize()
+
+	win.SetPosition(sSize.Width/2-screen.DefaultWindowSize.Width/2, sSize.Height/2-screen.DefaultWindowSize.Height/2)
 	u := &UIWindow{
 		raw:  win,
 		root: &view.UIView{},

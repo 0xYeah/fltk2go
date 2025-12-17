@@ -34,6 +34,7 @@ jobs:
           skipIfReleaseExists: 'true'
           tag: ${{ env.LATEST_TAG }}
           name: ${{ env.LATEST_TAG }}
+          bodyFile: changelog/${{ env.LATEST_TAG }}.md
 
   Build:
     runs-on: ${{ matrix.os }}
@@ -107,7 +108,7 @@ jobs:
           gcc -print-file-name=opengl32.dll
           ./build_example.sh || { echo "Build failed"; cat windres.log magick.log; exit 1; }
           ./build_example.sh test || { echo "Test build failed"; cat windres.log magick.log; exit 1; }
-          ls -l ./build/upload_tmp_dir/
+          ls -l ./build/upload_tmp_dir/\
 
       - name: Upload examples binaries Linux and windows
         id: upload_file_to_release_normal
