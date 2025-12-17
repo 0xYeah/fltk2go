@@ -152,8 +152,8 @@ function git_handle_push() {
         echo "Pushing to ${remote}..."
         git push --delete ${remote} latest \
         && git push ${remote} \
-        && git push ${remote} v${next_version_no} \
-        && git push ${remote} latest
+        && git push ${remote} latest \
+        && git push ${remote} v${next_version_no}
     done
     git tag -d v${pre_del_version_no}
     rm -rf changelog/v${pre_del_version_no}.md
