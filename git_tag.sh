@@ -156,6 +156,7 @@ function git_handle_push() {
         && git push ${remote} latest
     done
     git tag -d v${pre_del_version_no}
+    rm -rf changelog/v${pre_del_version_no}.md
 }
 
 handle_input(){
