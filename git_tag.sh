@@ -107,28 +107,34 @@ function git_handle_ready() {
 }
 
 function gen_changelog_if_possible() {
-    # 仅在有 git-cliff 时生成；没有就跳过（避免影响 release 流程）
     if ! command -v git-cliff >/dev/null 2>&1; then
         echo "[changelog] git-cliff not found, skip generating changelog."
         return 0
     fi
 
-    # 你要“一个版本一个 md”，再按月归档
-    local ym
+    local ym out_dir out_file
     ym="$(date -u +%Y-%m)"
-    local out_dir="changelog/${ym}"
+    out_dir="changelog/${ym}"
     mkdir -p "${out_dir}"
 
-    local out_file="${out_dir}/${CURRENT_VERSION}..${NEXT_VERSION}.md"
+    out_file="${out_dir}/${NEXT_VERSION}.md"
 
-    echo "[changelog] generating ${out_file} (unreleased commits, tag=${NEXT_VERSION})"
+    # 关键：不要用 --unreleased（会被 latest 干扰），直接用显式范围
+    # 先确保 CURRENT_VERSION 是一个存在的 tag
+    if ! git rev-parse -q --verify "refs/tags/${CURRENT_VERSION}" >/dev/null; then
+        echo "[changelog] tag ${CURRENT_VERSION} not found, skip changelog."
+        return 0
+    fi
 
-    # 生成“未发布提交”的 changelog，并把标题标为 NEXT_VERSION
-    # --unreleased: 处理不属于任何 tag 的提交
-    # --tag: 指定生成内容的版本标题
-    git-cliff --config cliff.toml --unreleased --tag "${NEXT_VERSION}" -o "${out_file}"
+    # 如果区间内没有提交，就不生成文件（避免空文件）
+    if [[ "$(git rev-list --count "${CURRENT_VERSION}..HEAD")" == "0" ]]; then
+        echo "[changelog] no commits in range ${CURRENT_VERSION}..HEAD, skip changelog."
+        return 0
+    fi
+
+    echo "[changelog] generating ${out_file} (range: ${CURRENT_VERSION}..HEAD, title: ${NEXT_VERSION})"
+    git-cliff --config cliff.toml "${CURRENT_VERSION}..HEAD" --tag "${NEXT_VERSION}" -o "${out_file}"
 }
-
 
 function git_handle_push() {
     local current_version_no=${CURRENT_VERSION//v/}
