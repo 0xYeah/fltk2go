@@ -112,9 +112,8 @@ function gen_changelog_if_possible() {
         return 0
     fi
 
-    local ym out_dir out_file
-    ym="$(date -u +%Y-%m)"
-    out_dir="changelog/${ym}"
+    local out_dir out_file
+    out_dir="changelog"
     mkdir -p "${out_dir}"
 
     out_file="${out_dir}/${NEXT_VERSION}.md"
