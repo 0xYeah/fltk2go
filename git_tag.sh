@@ -111,23 +111,15 @@ function find_prev_release_commit() {
 }
 
 function gen_changelog_if_possible() {
-    if ! command -v git-cliff >/dev/null 2>&1; then
-        echo "[changelog] git-cliff not found, skip generating changelog."
-        return 0
-    fi
-
     local out_dir out_file prev_release_sha range_end range
     out_dir="changelog"
     mkdir -p "${out_dir}"
-
     out_file="${out_dir}/${NEXT_VERSION}.md"
 
-    # 以“上一次 Release:--:”提交为左边界
     prev_release_sha="$(find_prev_release_commit)"
     range_end="HEAD"
 
     if [ -z "${prev_release_sha}" ]; then
-        # 没有历史 release marker：从仓库起点到当前 HEAD
         range="$(git rev-list --max-parents=0 HEAD | tail -n 1)..${range_end}"
         echo "[changelog] no previous Release marker found, use range ${range}"
     else
@@ -135,8 +127,7 @@ function gen_changelog_if_possible() {
         echo "[changelog] previous Release marker: ${prev_release_sha}"
     fi
 
-if [[ "$(git rev-list --count "${range}")" == "0" ]]; then
-    echo "[changelog] no commits in range ${range}, write release marker only."
+    # 默认：先写一个最小 changelog（确保文件一定存在）
     cat > "${out_file}" <<EOF
 ## ${NEXT_VERSION}
 
@@ -144,37 +135,89 @@ if [[ "$(git rev-list --count "${range}")" == "0" ]]; then
 - Range: ${range}
 
 EOF
-    return 0
-fi
 
-    echo "[changelog] generating ${out_file} (range: ${range}, title: ${NEXT_VERSION})"
-    git-cliff --config cliff.toml "${range}" --tag "${NEXT_VERSION}" -o "${out_file}"
+    # 如果 git-cliff 存在且区间非空，则用 git-cliff 覆盖（还是同一个文件，只写最终版本）
+    if command -v git-cliff >/dev/null 2>&1; then
+        if [[ "$(git rev-list --count "${range}")" != "0" ]]; then
+            echo "[changelog] generating ${out_file} (range: ${range}, title: ${NEXT_VERSION})"
+            if ! git-cliff --config cliff.toml "${range}" --tag "${NEXT_VERSION}" -o "${out_file}"; then
+                echo "[changelog] git-cliff failed, keep fallback changelog."
+            fi
+        else
+            echo "[changelog] no commits in range ${range}, keep fallback changelog."
+        fi
+    else
+        echo "[changelog] git-cliff not found, keep fallback changelog."
+    fi
 }
 
 
-function git_handle_push() {
-    local current_version_no=${CURRENT_VERSION//v/}
-    local next_version_no=${NEXT_VERSION//v/}
-    local pre_del_version_no=$(get_pre_del_version_no "$current_version_no")
-    echo "Pre Del Version With v"${pre_del_version_no}
 
-    gen_changelog_if_possible \
-    && git add . \
-    && git commit -m "Release:--: v${next_version_no}_$(date -u +"%Y-%m-%d_%H:%M:%S")"_"UTC" \
-    && git tag v${next_version_no} \
-    && git tag -f latest v${next_version_no}
+function gen_changelog_if_possible() {
+    local out_dir out_file prev_release_sha range_end range
+    out_dir="changelog"
+    mkdir -p "${out_dir}"
 
-    for remote in $(git remote)
-    do
-        echo "Pushing to ${remote}..."
-        git push --delete ${remote} latest \
-        && git push ${remote} \
-        && git push ${remote} latest \
-        && git push ${remote} v${next_version_no}
-    done
-    git tag -d v${pre_del_version_no}
-    rm -rf changelog/v${pre_del_version_no}.md
+    out_file="${out_dir}/${NEXT_VERSION}.md"
+
+    prev_release_sha="$(find_prev_release_commit)"
+    range_end="HEAD"
+
+    if [ -z "${prev_release_sha}" ]; then
+        prev_release_sha="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+        range="${prev_release_sha}..${range_end}"
+        echo "[changelog] no previous Release marker found, use range ${range}"
+        local prev_label="root(${prev_release_sha:0:7})"
+    else
+        range="${prev_release_sha}..${range_end}"
+        echo "[changelog] previous Release marker: ${prev_release_sha}"
+        local prev_label="${prev_release_sha:0:7}"
+    fi
+
+    local commit_count
+    commit_count="$(git rev-list --count "${range}" 2>/dev/null || echo 0)"
+
+    {
+        echo "## ${NEXT_VERSION}"
+        echo
+        echo "- Release:--: ${NEXT_VERSION}_$(date -u +"%Y-%m-%d_%H:%M:%S")_UTC"
+        echo "- Range: ${range}"
+        echo "- Commits: ${commit_count}"
+        echo
+
+        echo "### 从上次 Release commit 到本次 Release commit 的文件变化摘要"
+        echo
+        if [[ "${commit_count}" == "0" ]]; then
+            echo "- (no commits between releases)"
+            echo "- (no file changes)"
+        else
+            local shortstat
+            shortstat="$(git diff --shortstat "${range}" 2>/dev/null || true)"
+            if [ -n "${shortstat}" ]; then
+                echo "- ${shortstat}"
+            else
+                echo "- (no file changes)"
+            fi
+            echo
+            echo '```'
+            git diff --stat "${range}" 2>/dev/null || true
+            echo '```'
+        fi
+        echo
+
+        echo "### Commit messages between two Release"
+        echo
+        if [[ "${commit_count}" == "0" ]]; then
+            echo "- (no commits between releases)"
+        else
+            git log --reverse --no-merges --date=short --pretty=format:"- %ad %h %s" "${range}" || true
+        fi
+        echo
+    } > "${out_file}"
+
+    echo "[changelog] wrote ${out_file}"
 }
+
 
 handle_input(){
     if [[ $1 == "-get_pre_del_tag_name" ]]; then
