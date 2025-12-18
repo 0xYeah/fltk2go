@@ -136,14 +136,14 @@ function gen_changelog_if_possible() {
     commit_count="$(git rev-list --count "${range}" 2>/dev/null || echo 0)"
 
     {
-        echo "## ${NEXT_VERSION}"
+        echo "## ${NEXT_VERSION} ChangeLog"
         echo
         echo "- Release:--: ${NEXT_VERSION}_$(date -u +"%Y-%m-%d_%H:%M:%S")_UTC"
         echo "- Range: ${range}"
         echo "- Commits: ${commit_count}"
         echo
 
-        echo "### 从上次 Release commit 到本次 Release commit 的文件变化摘要"
+        echo "###  commit infos"
         echo
         if [[ "${commit_count}" == "0" ]]; then
             echo "- (no commits between releases)"
@@ -166,7 +166,7 @@ function gen_changelog_if_possible() {
         fi
         echo
 
-        echo "### 两次 Release:--: 之间的提交摘要（commit messages）"
+        echo "### commit messages"
         echo
         if [[ "${commit_count}" == "0" ]]; then
             echo "- (no commits between releases)"

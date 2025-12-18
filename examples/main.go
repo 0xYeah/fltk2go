@@ -7,9 +7,9 @@ import (
 
 	"github.com/0xYeah/fltk2go"
 	"github.com/0xYeah/fltk2go/foundation"
-	uibutton "github.com/0xYeah/fltk2go/uikit/button"
-	uilabel "github.com/0xYeah/fltk2go/uikit/label"
-	uiwindow "github.com/0xYeah/fltk2go/uikit/window"
+	"github.com/0xYeah/fltk2go/uikit/button"
+	"github.com/0xYeah/fltk2go/uikit/label"
+	"github.com/0xYeah/fltk2go/uikit/window"
 )
 
 const (
@@ -26,20 +26,20 @@ func main() {
 	// 防止 goroutine 被调度到其他 OS 线程，导致 GUI / 图形上下文失效或异常。
 	runtime.LockOSThread()
 
-	win := uiwindow.NewUIWindow(&foundation.Rect{X: 50, Y: 50, Width: 600, Height: 400}, "Counter")
+	win := window.NewUIWindow(600, 400, "Counter")
 	root := win.RootView()
 
-	title := uilabel.NewUILabel(&foundation.Rect{X: 20, Y: 20, Width: 560, Height: 40}, "你点击了 0 次")
+	title := label.NewUILabel(&foundation.Rect{X: 20, Y: 20, Width: 560, Height: 40}, "你点击了 0 次")
 	title.SetFontSize(20)
 	title.SetTextColor(GRAY)
 
-	btn := uibutton.NewUIButton(&foundation.Rect{X: 20, Y: 80, Width: 160, Height: 44}, "点我 +1")
+	btn := button.NewUIButton(&foundation.Rect{X: 20, Y: 80, Width: 160, Height: 44}, "点我 +1")
 	btn.SetBackgroundColor(BLUE)
 
 	count := 0
 	btn.OnTouchUpInside(func() {
 		count++
-		title.SetText("你点击了 " + strconv.Itoa(count) + " 次")
+		title.SetText("Clicked " + strconv.Itoa(count) + " count")
 	})
 
 	root.AddSubview(title)

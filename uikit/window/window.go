@@ -12,10 +12,18 @@ type UIWindow struct {
 	root *view.UIView
 }
 
-func NewUIWindow(rect *foundation.Rect, title string) *UIWindow {
+func NewUIWindow(width, height int, title string) *UIWindow {
+	sSize := screen.GetScreenSize()
+	aRect := &foundation.Rect{X: sSize.Width/2 - width/2, Y: sSize.Height/2 - height/2, Width: width, Height: height}
+
+	return NewWindowWithRect(aRect, title)
+}
+
+func NewWindowWithRect(rect *foundation.Rect, title string) *UIWindow {
 	// 给 nil 一个默认值，避免后面 rect.X 崩溃
+	sSize := screen.GetScreenSize()
 	if rect == nil {
-		rect = &foundation.Rect{X: 100, Y: 100, Width: 800, Height: 600}
+		rect = &foundation.Rect{X: sSize.Width/2 - screen.DefaultWindowSize.Width/2, Y: sSize.Height/2 - screen.DefaultWindowSize.Height/2, Width: 800, Height: 600}
 	}
 	if rect.Width <= 0 {
 		rect.Width = 800
@@ -26,9 +34,6 @@ func NewUIWindow(rect *foundation.Rect, title string) *UIWindow {
 
 	win := fltk_bridge.NewWindowWithPosition(rect.X, rect.Y, rect.Width, rect.Height, title)
 
-	sSize := screen.GetScreenSize()
-
-	win.SetPosition(sSize.Width/2-screen.DefaultWindowSize.Width/2, sSize.Height/2-screen.DefaultWindowSize.Height/2)
 	u := &UIWindow{
 		raw:  win,
 		root: &view.UIView{},
