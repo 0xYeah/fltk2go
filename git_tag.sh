@@ -106,34 +106,51 @@ function git_handle_ready() {
     fi
 }
 
+function find_prev_release_commit() {
+    git log --grep='^Release:--:' --format='%H' -n 1 HEAD || true
+}
+
 function gen_changelog_if_possible() {
     if ! command -v git-cliff >/dev/null 2>&1; then
         echo "[changelog] git-cliff not found, skip generating changelog."
         return 0
     fi
 
-    local out_dir out_file
+    local out_dir out_file prev_release_sha range_end range
     out_dir="changelog"
     mkdir -p "${out_dir}"
 
     out_file="${out_dir}/${NEXT_VERSION}.md"
 
-    # 关键：不要用 --unreleased（会被 latest 干扰），直接用显式范围
-    # 先确保 CURRENT_VERSION 是一个存在的 tag
-    if ! git rev-parse -q --verify "refs/tags/${CURRENT_VERSION}" >/dev/null; then
-        echo "[changelog] tag ${CURRENT_VERSION} not found, skip changelog."
-        return 0
+    # 以“上一次 Release:--:”提交为左边界
+    prev_release_sha="$(find_prev_release_commit)"
+    range_end="HEAD"
+
+    if [ -z "${prev_release_sha}" ]; then
+        # 没有历史 release marker：从仓库起点到当前 HEAD
+        range="$(git rev-list --max-parents=0 HEAD | tail -n 1)..${range_end}"
+        echo "[changelog] no previous Release marker found, use range ${range}"
+    else
+        range="${prev_release_sha}..${range_end}"
+        echo "[changelog] previous Release marker: ${prev_release_sha}"
     fi
 
-    # 如果区间内没有提交，就不生成文件（避免空文件）
-    if [[ "$(git rev-list --count "${CURRENT_VERSION}..HEAD")" == "0" ]]; then
-        echo "[changelog] no commits in range ${CURRENT_VERSION}..HEAD, skip changelog."
-        return 0
-    fi
+if [[ "$(git rev-list --count "${range}")" == "0" ]]; then
+    echo "[changelog] no commits in range ${range}, write release marker only."
+    cat > "${out_file}" <<EOF
+## ${NEXT_VERSION}
 
-    echo "[changelog] generating ${out_file} (range: ${CURRENT_VERSION}..HEAD, title: ${NEXT_VERSION})"
-    git-cliff --config cliff.toml "${CURRENT_VERSION}..HEAD" --tag "${NEXT_VERSION}" -o "${out_file}"
+- Release:--: ${NEXT_VERSION}_$(date -u +"%Y-%m-%d_%H:%M:%S")_UTC
+- Range: ${range}
+
+EOF
+    return 0
+fi
+
+    echo "[changelog] generating ${out_file} (range: ${range}, title: ${NEXT_VERSION})"
+    git-cliff --config cliff.toml "${range}" --tag "${NEXT_VERSION}" -o "${out_file}"
 }
+
 
 function git_handle_push() {
     local current_version_no=${CURRENT_VERSION//v/}
@@ -143,7 +160,7 @@ function git_handle_push() {
 
     gen_changelog_if_possible \
     && git add . \
-    && git commit -m "Release v${next_version_no}_$(date -u +"%Y-%m-%d_%H:%M:%S")"_"UTC" \
+    && git commit -m "Release:--: v${next_version_no}_$(date -u +"%Y-%m-%d_%H:%M:%S")"_"UTC" \
     && git tag v${next_version_no} \
     && git tag -f latest v${next_version_no}
 
