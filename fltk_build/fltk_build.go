@@ -446,7 +446,8 @@ func generateCgo(ctx *buildCtx) {
 	defer f.Close()
 
 	// build tag
-	if ctx.goos == "darwin" && ctx.outArch == "universal" {
+	isDarwinUniversal := (ctx.goos == "darwin" && ctx.outArch == "universal")
+	if isDarwinUniversal {
 		fmt.Fprintln(f, "//go:build darwin && (amd64 || arm64)\n")
 	} else {
 		fmt.Fprintf(f, "//go:build %s && %s\n\n", ctx.goos, ctx.goarch)
@@ -462,18 +463,24 @@ func generateCgo(ctx *buildCtx) {
 		largeFileDefines = " -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64"
 	}
 
+	// 关键：universal 的 #cgo 条件必须用 "darwin"（不带 arch），否则 amd64 不生效
+	cgoCondOSArch := fmt.Sprintf("%s,%s", ctx.goos, ctx.goarch)
+	if isDarwinUniversal {
+		cgoCondOSArch = "darwin"
+	}
+
 	// CPPFLAGS：先 arch，再 include，再 images
 	fmt.Fprintf(
 		f,
-		"// #cgo %s,%s CPPFLAGS: -I${SRCDIR}/%s -I${SRCDIR}/%s -I${SRCDIR}/%s/FL/images%s\n",
-		ctx.goos, ctx.goarch,
+		"// #cgo %s CPPFLAGS: -I${SRCDIR}/%s -I${SRCDIR}/%s -I${SRCDIR}/%s/FL/images%s\n",
+		cgoCondOSArch,
 		relLibArchForCgo,
 		relIncludeForCgo,
 		relIncludeForCgo,
 		largeFileDefines,
 	)
 
-	fmt.Fprintf(f, "// #cgo %s,%s CXXFLAGS: -std=c++11\n", ctx.goos, ctx.goarch)
+	fmt.Fprintf(f, "// #cgo %s CXXFLAGS: -std=%s\n", cgoCondOSArch, config.FLTKCppStandard)
 
 	// 注意：检查目录用“项目根下的真实路径”，输出用“相对 SRCDIR 的路径”
 	checkDir := filepath.ToSlash(filepath.Join("lib", ctx.goos, ctx.outArch))      // 不带 ..
@@ -494,28 +501,26 @@ func generateCgo(ctx *buildCtx) {
 	case "windows":
 		fmt.Fprintf(
 			f,
-			"// #cgo %s,%s LDFLAGS: -mwindows %s -lglu32 -lopengl32 -lgdiplus -lole32 -luuid -lcomctl32 -lws2_32 -lwinspool\n",
-			ctx.goos, ctx.goarch, libFlags,
+			"// #cgo %s LDFLAGS: -mwindows %s -lglu32 -lopengl32 -lgdiplus -lole32 -luuid -lcomctl32 -lws2_32 -lwinspool\n",
+			cgoCondOSArch, libFlags,
 		)
 
 	case "darwin":
-		// 关键：这里不要把 arm64 + universal 混在同一个 cgo 文件里
-		// 这个 cgo 文件只链接 ctx.outArch 对应目录下的 .a
 		fmt.Fprintf(
 			f,
-			"// #cgo %s,%s LDFLAGS: %s -lm -lpthread -framework Cocoa -framework OpenGL -framework UniformTypeIdentifiers\n",
-			ctx.goos, ctx.goarch, libFlags,
+			"// #cgo %s LDFLAGS: %s -lm -lpthread -framework Cocoa -framework OpenGL -framework UniformTypeIdentifiers\n",
+			cgoCondOSArch, libFlags,
 		)
 
 	case "linux":
 		fmt.Fprintf(
 			f,
-			"// #cgo %s,%s LDFLAGS: %s -lX11 -lXext -lXinerama -lXcursor -lXrender -lXfixes -lXft -lfontconfig -lfreetype -lGL -lGLU -ldl -lpthread -lm\n",
-			ctx.goos, ctx.goarch, libFlags,
+			"// #cgo %s LDFLAGS: %s -lX11 -lXext -lXinerama -lXcursor -lXrender -lXfixes -lXft -lfontconfig -lfreetype -lGL -lGLU -ldl -lpthread -lm\n",
+			cgoCondOSArch, libFlags,
 		)
 
 	default:
-		fmt.Fprintf(f, "// #cgo %s,%s LDFLAGS: %s\n", ctx.goos, ctx.goarch, libFlags)
+		fmt.Fprintf(f, "// #cgo %s LDFLAGS: %s\n", cgoCondOSArch, libFlags)
 	}
 
 	fmt.Fprintln(f, `import "C"`)
@@ -649,6 +654,12 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 	dstCfg := filepath.Join(universalDir, "FL", "fl_config.h")
 	copyFile(srcCfg, dstCfg, 0644)
 	normalizeTextLF(dstCfg)
+
+	mustFileExist(filepath.Join(universalDir, "libfltk.a"))
+	_ = os.RemoveAll(arm64Dir)
+	_ = os.RemoveAll(amd64Dir)
+	fmt.Println("Cleaned darwin thin libs: arm64/amd64 removed, kept universal only")
+
 	fmt.Println("macOS universal merge completed")
 }
 
@@ -792,8 +803,6 @@ func buildStaticLibs(ctx *buildCtx) {
 	writeManifestForTarget(ctx, ctx.goos, ctx.outArch)
 
 	mustFileExist(filepath.Join("lib", ctx.goos, ctx.outArch, "FL", "fl_config.h"))
-
-	generateCgo(ctx)
 }
 
 func main() {
@@ -818,6 +827,7 @@ func main() {
 	// ===== 其他平台 / 单架构 =====
 	ctx := newBuildCtx(runtime.GOARCH, runtime.GOARCH)
 	buildStaticLibs(ctx)
+	generateCgo(ctx)
 
 	fmt.Printf("Successfully generated libraries for OS: %s, architecture: %s\n",
 		ctx.goos, ctx.goarch)
