@@ -1,0 +1,25 @@
+{
+  "module": "github.com/0xYeah/fltk2go",
+  "fltk_version": "release-1.4.4",
+  "target": {
+    "goos": "darwin",
+    "out_arch": "arm64"
+  },
+  "build": {
+    "toolchain": "cmake+clang",
+    "date": "2025-12-19T00:00:04Z",
+    "git_rev": "9c70ea95a176933ffd575022d145c284d1fc9ef7"
+  },
+  "artifacts": {
+    "libs": [
+      "libfltk.a",
+      "libfltk_forms.a",
+      "libfltk_gl.a",
+      "libfltk_images.a",
+      "libfltk_jpeg.a",
+      "libfltk_png.a",
+      "libfltk_z.a"
+    ],
+    "has_fl_config": true
+  }
+}
