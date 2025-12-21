@@ -426,6 +426,19 @@ func ensureFlags(s string, flags ...string) string {
 	return strings.TrimSpace(s)
 }
 
+func dedupBySpace(s string) string {
+	fields := strings.Fields(s)
+	seen := make(map[string]bool, len(fields))
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if !seen[f] {
+			seen[f] = true
+			out = append(out, f)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
 // =======================
 // CGO
 // =======================
@@ -463,16 +476,21 @@ func generateCgo(ctx *buildCtx) {
 	}
 
 	// 1) 通过 fltk-config 获取参数
-	cxx := runFltkConfig(ctx, "--use-gl", "--use-images", "--use-forms", "--cxxflags")
-	ld := runFltkConfig(ctx, "--use-gl", "--use-images", "--use-forms", "--ldstaticflags")
+	cxx := strings.TrimSpace(runFltkConfig(ctx, "--use-gl", "--use-images", "--use-forms", "--cxxflags"))
+	ld := strings.TrimSpace(runFltkConfig(ctx, "--use-gl", "--use-images", "--use-forms", "--ldstaticflags"))
 
 	// 2) rewrite 到最终目录（libs/fltk）
-	cxx = rewritePathsForCgo(ctx, cxx)
-	ld = rewritePathsForCgo(ctx, ld)
+	cxx = strings.TrimSpace(rewritePathsForCgo(ctx, cxx))
+	ld = strings.TrimSpace(rewritePathsForCgo(ctx, ld))
 
-	cxx = strings.TrimSpace(cxx)
+	// 3) macOS：weak_framework 兼容处理（建议统一成 -framework，兼容性更好）
+	if ctx.goos == "darwin" {
+		ld = strings.ReplaceAll(ld, "-weak_framework UniformTypeIdentifiers", "-framework UniformTypeIdentifiers")
+	}
+
+	// 4) largefile：按“缺啥补啥”
+	// （macOS 一般不需要你这三项；linux/windows 常见需要）
 	if ctx.goos == "windows" || ctx.goos == "linux" {
-		// 缺哪个补哪个（字符串包含判断即可）
 		if !strings.Contains(cxx, "-D_LARGEFILE_SOURCE") {
 			cxx += " -D_LARGEFILE_SOURCE"
 		}
@@ -483,32 +501,58 @@ func generateCgo(ctx *buildCtx) {
 			cxx += " -D_FILE_OFFSET_BITS=64"
 		}
 	}
-	ld = strings.TrimSpace(ld)
 
-	// 3) macOS：weak_framework 兼容处理（保留你之前逻辑）
-	if ctx.goos == "darwin" {
-		ld = strings.ReplaceAll(ld, "-weak_framework UniformTypeIdentifiers", "-framework UniformTypeIdentifiers")
+	// 5) 让 fl_config.h 的路径最优先：把 -I<final>/<os>/<arch> 放最前
+	finalRoot := "${SRCDIR}/../" + filepath.ToSlash(ctx.finalRoot)
+	incArch := fmt.Sprintf("-I%s/%s/%s", finalRoot, ctx.goos, ctx.outArch) // 最前（命中 FL/fl_config.h）
+	incBase := fmt.Sprintf("-I%s/include", finalRoot)
+	incImg := fmt.Sprintf("-I%s/include/FL/images", finalRoot)
+
+	// 关键修复：不要 ReplaceAll 删子串，改为 token 级过滤 & 去重
+	rmSet := map[string]struct{}{
+		incArch: {},
+		incBase: {},
+		incImg:  {},
 	}
 
-	// ✅ 关键修正：补充 include 搜索路径，让 <FL/fl_config.h> 能找到
-	// fl_config.h 在：libs/fltk/<os>/<arch>/FL/fl_config.h
-	// 因此必须加：-I../libs/fltk/<os>/<arch>
-	finalRootFromSRCDIR := "${SRCDIR}/../" + filepath.ToSlash(ctx.finalRoot) // fltk_bridge/ -> repo root -> libs/fltk
-	extraIncludes := fmt.Sprintf(
-		"-I%s/include -I%s/%s/%s -I%s/include/FL/images",
-		finalRootFromSRCDIR, finalRootFromSRCDIR, ctx.goos, ctx.outArch, finalRootFromSRCDIR,
-	)
+	toks := strings.Fields(cxx)
+	kept := make([]string, 0, len(toks))
+	seen := make(map[string]struct{}, len(toks))
 
-	// 4) 输出 #cgo
-	// 注意：extraIncludes 放前面，避免 fltk-config 自己的 -I 顺序影响查找
-	fmt.Fprintf(f, "// #cgo %s CPPFLAGS: %s %s\n", cgoCondOSArch, extraIncludes, cxx)
-	fmt.Fprintf(f, "// #cgo %s CXXFLAGS: -std=%s\n", cgoCondOSArch, config.FLTKCppStandard)
+	for _, t := range toks {
+		// 过滤掉我们自己会前置补上的 include 路径（避免重复）
+		if _, ok := rmSet[t]; ok {
+			continue
+		}
 
+		// 保险：如果之前错误 ReplaceAll 产生过裸 "/FL/images"，这里直接丢弃
+		//（防止 invalid flag in #cgo CPPFLAGS: /FL/images）
+		if strings.HasPrefix(t, "/") && strings.Contains(t, "FL/images") && !strings.HasPrefix(t, "-I") {
+			continue
+		}
+
+		// token 去重（完全相同的 flag 不要重复）
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		seen[t] = struct{}{}
+		kept = append(kept, t)
+	}
+	cxx = strings.Join(kept, " ")
+
+	// 6) 拼出最终 CPPFLAGS：我们自己的 -I 永远在最前
+	// 你要求 fl_config.h 相关优先级最高，所以顺序：incArch -> incBase -> incImg -> cxx(剩余 flags)
+	cppflags := strings.TrimSpace(strings.Join([]string{incArch, incBase, incImg, cxx}, " "))
+
+	// Windows：保持 -mwindows（也去重）
 	if ctx.goos == "windows" && !strings.Contains(ld, "-mwindows") {
 		ld = "-mwindows " + ld
 	}
 
-	fmt.Fprintf(f, "// #cgo %s LDFLAGS: %s\n", cgoCondOSArch, ld)
+	// 输出 #cgo
+	fmt.Fprintf(f, "// #cgo %s CPPFLAGS: %s\n", cgoCondOSArch, cppflags)
+	fmt.Fprintf(f, "// #cgo %s CXXFLAGS: -std=%s\n", cgoCondOSArch, config.FLTKCppStandard)
+	fmt.Fprintf(f, "// #cgo %s LDFLAGS: %s\n", cgoCondOSArch, strings.TrimSpace(ld))
 	fmt.Fprintln(f, `import "C"`)
 
 	fmt.Printf("Generated cgo file: %s\n", outPath)
@@ -610,12 +654,45 @@ func fltkConfigPath(ctx *buildCtx) string {
 	return filepath.Join(ctx.cmakeBuild, "bin", "fltk-config")
 }
 
+func findGitShPath() (string, error) {
+	// 常见的Git安装路径
+	possiblePaths := []string{
+		filepath.Join(os.Getenv("ProgramFiles"), "Git", "bin", "sh.exe"),
+		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Git", "bin", "sh.exe"),
+		filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Local", "GitForWindows", "bin", "sh.exe"),
+	}
+
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	// 也可以通过环境变量GIT_HOME查找
+	if gitHome := os.Getenv("GIT_HOME"); gitHome != "" {
+		path := filepath.Join(gitHome, "bin", "sh.exe")
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", errors.New("sh.exe not found in common Git paths")
+}
+
 func runFltkConfig(ctx *buildCtx, args ...string) string {
 	cfg := fltkConfigPath(ctx)
 	mustChmodX(cfg)
 
 	if ctx.goos == "windows" {
-		out := outputCmd("", "sh", append([]string{cfg}, args...)...)
+		// 自动查找Git的sh.exe路径
+		shPath, err := findGitShPath()
+		if err != nil {
+			fmt.Printf("Failed to find sh.exe: %v, fallback to 'sh'\n", err)
+			shPath = "sh"
+		}
+		// 用绝对路径的sh.exe调用，解决Goland调试路径问题
+		cmdArgs := append([]string{"-c", fmt.Sprintf("\"%s\" %s", cfg, strings.Join(args, " "))})
+		out := outputCmd("", shPath, cmdArgs...)
 		return string(out)
 	}
 	out := outputCmd("", cfg, args...)
