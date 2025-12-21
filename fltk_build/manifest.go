@@ -5,13 +5,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/0xYeah/fltk2go/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/0xYeah/fltk2go/config"
 )
 
 type fltk2goManifest struct {
@@ -79,9 +80,9 @@ func inferToolchain(goos string) string {
 	}
 }
 
-// writeManifestForTarget writes manifest to: lib/<goos>/<outArch>/fltk2go.manifest.json
+// writeManifestForTarget writes manifest to: libs/fltk/<goos>/<outArch>/fltk2go.manifest.json
 func writeManifestForTarget(ctx *buildCtx, outGOOS, outArch string) {
-	targetDir := filepath.Join("lib", outGOOS, outArch)
+	targetDir := filepath.Join("libs", "fltk", outGOOS, outArch)
 	if err := os.MkdirAll(targetDir, 0750); err != nil {
 		fmt.Printf("Error creating dir %s, %v\n", targetDir, err)
 		os.Exit(1)

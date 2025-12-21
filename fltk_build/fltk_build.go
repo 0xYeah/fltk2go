@@ -25,8 +25,8 @@ var (
 	// 默认: build
 	FLTKBuildRoot = getEnvOrDefault("FLTK_BUILD_ROOT", "build")
 
-	// 成品输出根目录（include / lib / cgo_* 文件）
-	// 默认: 当前项目根目录
+	// staging install 根目录（给 CMake install 用；不要求最终产物落在这）
+	// 默认: build/_install
 	OutputRoot = getEnvOrDefault("FLTK_OUTPUT_ROOT", filepath.Join("build", "_install"))
 
 	// 仅用于输出目录命名（lib/<os>/<arch>）
@@ -43,6 +43,9 @@ var (
 	// Windows patch 路径（脚本资产，应该提交；不要放进 build 缓存）
 	// 默认: fltk_build/fltk-1.4.patch
 	FLTKPatchPath = getEnvOrDefault("FLTK_PATCH_PATH", filepath.Join("fltk_build", "fltk-1.4.patch"))
+
+	// ✅ 最终产物固定落到这里（全平台统一）
+	FinalRoot = getEnvOrDefault("FLTK_FINAL_ROOT", filepath.Join("libs", "fltk"))
 )
 
 func getEnvOrDefault(key, def string) string {
@@ -60,10 +63,13 @@ type buildCtx struct {
 	goarch  string
 	outArch string
 
-	// 输出相关
+	// staging install 输出相关（CMake install 写这里）
 	outputRoot string
 	libdir     string
 	includeDir string
+
+	// ✅ 最终产物根目录（copy 到这里）
+	finalRoot string
 
 	// build 缓存相关
 	buildRoot  string
@@ -107,14 +113,18 @@ func mustGetwd() string {
 	}
 	return wd
 }
+
 func newBuildCtx(goarch, outArch string) *buildCtx {
 	goos := runtime.GOOS
 
 	outputRoot := filepath.Clean(OutputRoot)
 	buildRoot := filepath.Clean(FLTKBuildRoot)
 
+	// staging install: build/_install/lib/<os>/<arch>
 	libdir := filepath.Join(outputRoot, "lib", goos, outArch)
 	includeDir := filepath.Join(outputRoot, "include")
+
+	finalRoot := filepath.Clean(FinalRoot)
 
 	return &buildCtx{
 		goos:       goos,
@@ -123,11 +133,12 @@ func newBuildCtx(goarch, outArch string) *buildCtx {
 		outputRoot: outputRoot,
 		libdir:     libdir,
 		includeDir: includeDir,
+		finalRoot:  finalRoot,
 
 		buildRoot:  buildRoot,
 		fltkSource: filepath.Join(buildRoot, "fltk"),
 		// 必须按 arch 隔离，否则一定踩坑
-		cmakeBuild: filepath.Join(buildRoot, "fltk-cmake-"+outArch),
+		cmakeBuild: filepath.Join(buildRoot, fmt.Sprintf("fltk-cmake-%s-%s", goos, outArch)),
 
 		currentDir: mustGetwd(),
 	}
@@ -137,6 +148,9 @@ func prepareDirs(ctx *buildCtx) {
 	mustMkdirAll(ctx.buildRoot, 0750)
 	mustMkdirAll(ctx.libdir, 0750)
 	mustMkdirAll(ctx.includeDir, 0750)
+
+	// ✅ 最终根目录也预建
+	mustMkdirAll(ctx.finalRoot, 0750)
 }
 
 // =======================
@@ -238,13 +252,20 @@ func runCMakeConfigure(ctx *buildCtx) {
 
 		// 静态库
 		"-DBUILD_SHARED_LIBS=OFF",
+		"-DFLTK_BUILD_SHARED_LIBS=OFF",
 
-		"-DOPTION_USE_WAYLAND=OFF",
-		"-DOPTION_USE_SYSTEM_LIBJPEG=OFF",
-		"-DOPTION_USE_SYSTEM_LIBPNG=OFF",
-		"-DOPTION_USE_SYSTEM_ZLIB=OFF",
+		// bundled libs (跨发行版/跨架构稳定)
+		"-DFLTK_USE_SYSTEM_LIBJPEG=OFF",
+		"-DFLTK_USE_SYSTEM_LIBPNG=OFF",
+		"-DFLTK_USE_SYSTEM_ZLIB=OFF",
 
-		// install 到输出根目录；libdir 仍保持 lib/<os>/<arch> 结构
+		// OpenGL
+		"-DFLTK_USE_GL=ON",
+
+		// Wayland（你当前策略：禁用，避免依赖漂移）
+		"-DFLTK_USE_WAYLAND=OFF",
+
+		// install 到 staging outputRoot
 		"-DCMAKE_INSTALL_PREFIX=" + ctx.outputRoot,
 		"-DCMAKE_INSTALL_INCLUDEDIR=include",
 		"-DCMAKE_INSTALL_LIBDIR=" + filepath.Join("lib", ctx.goos, ctx.outArch),
@@ -295,7 +316,6 @@ func normalizeTextLF(path string) {
 	// stray CR -> LF
 	b2 = bytes.ReplaceAll(b2, []byte("\r"), []byte("\n"))
 
-	// 内容没变就不写回
 	if bytes.Equal(b, b2) {
 		return
 	}
@@ -307,7 +327,6 @@ func normalizeTextLF(path string) {
 }
 
 func moveFileCrossPlatform(src, dst string) {
-	// 源必须存在
 	st, err := os.Stat(src)
 	if err != nil {
 		fmt.Printf("Error stating %s, %v\n", src, err)
@@ -318,18 +337,13 @@ func moveFileCrossPlatform(src, dst string) {
 		os.Exit(1)
 	}
 
-	// 目标若存在，明确覆盖：先删
 	_ = os.Remove(dst)
-
-	// 确保目标目录存在
 	mustMkdirAll(filepath.Dir(dst), 0750)
 
-	// 先尝试 Rename（同盘最快）
 	if err := os.Rename(src, dst); err == nil {
 		return
 	}
 
-	// Rename 失败则 copy + remove
 	copyFile(src, dst, st.Mode().Perm())
 	if err := os.Remove(src); err != nil {
 		fmt.Printf("Error removing %s, %v\n", src, err)
@@ -369,6 +383,7 @@ func detectFltkConfigHeader(dir string) string {
 	return candidates[0]
 }
 
+// ✅ 保持你原来的策略：把 fl_config.h 从 include/FL 移到 lib/<os>/<arch>/FL
 func moveFlConfigHeader(ctx *buildCtx) {
 	targetDir := filepath.Join(ctx.libdir, "FL")
 	mustMkdirAll(targetDir, 0750)
@@ -379,58 +394,45 @@ func moveFlConfigHeader(ctx *buildCtx) {
 	src := filepath.Join(srcDir, cfg)
 	dst := filepath.Join(ctx.libdir, "FL", cfg)
 
-	// 源文件必须存在（否则 install 没产出，直接 fail-fast）
 	if _, err := os.Stat(src); err != nil {
 		fmt.Printf("Error: fl_config.h not found: %s, %v\n", src, err)
 		os.Exit(1)
 	}
 
 	moveFileCrossPlatform(src, dst)
-
-	// 核心需求：统一 LF
 	normalizeTextLF(dst)
 
-	// 可选：再确认 dst 存在
 	if _, err := os.Stat(dst); err != nil {
 		fmt.Printf("Error: fl_config.h not created: %s, %v\n", dst, err)
 		os.Exit(1)
 	}
 }
 
+func ensureFlags(s string, flags ...string) string {
+	// 统一空白，避免 "  " 影响 contains 判定
+	s = " " + strings.TrimSpace(s) + " "
+
+	for _, f := range flags {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		// 用两侧空格做粗略“单词边界”，比 strings.Contains 更稳一点
+		pat := " " + f + " "
+		if !strings.Contains(s, pat) {
+			s += f + " "
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
 // =======================
 // CGO
 // =======================
-func listStaticLibs(relLibArch string) []string {
-	dir := filepath.FromSlash(relLibArch)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		fmt.Printf("Error reading %s, %v\n", dir, err)
-		os.Exit(1)
-	}
-
-	var libs []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if strings.HasPrefix(name, "libfltk") && strings.HasSuffix(name, ".a") {
-			libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(relLibArch, name)))
-		}
-	}
-
-	if len(libs) == 0 {
-		fmt.Printf("No libfltk*.a found in %s\n", dir)
-		os.Exit(1)
-	}
-
-	return libs
-}
-
 func generateCgo(ctx *buildCtx) {
 	mustMkdirAll(CGOOutDir, 0750)
 
-	// 文件名
+	// 文件名：darwin universal 特例
 	suffix := ctx.goarch
 	if ctx.goos == "darwin" && ctx.outArch == "universal" {
 		suffix = "universal"
@@ -454,79 +456,67 @@ func generateCgo(ctx *buildCtx) {
 	}
 	fmt.Fprintf(f, "package %s\n\n", CGOPackage)
 
-	// SRCDIR 在 fltk_bridge 目录，所以 lib/include 都要 ../
-	relLibArchForCgo := filepath.ToSlash(filepath.Join("..", "lib", ctx.goos, ctx.outArch))
-	relIncludeForCgo := filepath.ToSlash(filepath.Join("..", "lib", "include"))
-
-	largeFileDefines := ""
-	if ctx.goos == "windows" || ctx.goos == "linux" {
-		largeFileDefines = " -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64"
-	}
-
-	// 关键：universal 的 #cgo 条件必须用 "darwin"（不带 arch），否则 amd64 不生效
+	// universal 的 #cgo 条件必须用 darwin（不带 arch）
 	cgoCondOSArch := fmt.Sprintf("%s,%s", ctx.goos, ctx.goarch)
 	if isDarwinUniversal {
 		cgoCondOSArch = "darwin"
 	}
 
-	// CPPFLAGS：先 arch，再 include，再 images
-	fmt.Fprintf(
-		f,
-		"// #cgo %s CPPFLAGS: -I${SRCDIR}/%s -I${SRCDIR}/%s -I${SRCDIR}/%s/FL/images%s\n",
-		cgoCondOSArch,
-		relLibArchForCgo,
-		relIncludeForCgo,
-		relIncludeForCgo,
-		largeFileDefines,
-	)
+	// 1) 通过 fltk-config 获取参数
+	cxx := runFltkConfig(ctx, "--use-gl", "--use-images", "--use-forms", "--cxxflags")
+	ld := runFltkConfig(ctx, "--use-gl", "--use-images", "--use-forms", "--ldstaticflags")
 
-	fmt.Fprintf(f, "// #cgo %s CXXFLAGS: -std=%s\n", cgoCondOSArch, config.FLTKCppStandard)
+	// 2) rewrite 到最终目录（libs/fltk）
+	cxx = rewritePathsForCgo(ctx, cxx)
+	ld = rewritePathsForCgo(ctx, ld)
 
-	// 注意：检查目录用“项目根下的真实路径”，输出用“相对 SRCDIR 的路径”
-	checkDir := filepath.ToSlash(filepath.Join("lib", ctx.goos, ctx.outArch))      // 不带 ..
-	emitRel := filepath.ToSlash(filepath.Join("..", "lib", ctx.goos, ctx.outArch)) // 只允许相对片段
-
-	libs := orderedFltkStaticLibs(checkDir, emitRel)
-
-	// 保险：强制禁止绝对路径进入 LDFLAGS（避免 fltk-config 输出混进来）
-	for _, x := range libs {
-		if strings.Contains(x, "/Users/") || strings.Contains(x, ":\\") || strings.HasPrefix(x, "/") {
-			fmt.Printf("Error: absolute path detected in static libs: %s\n", x)
-			os.Exit(1)
+	cxx = strings.TrimSpace(cxx)
+	if ctx.goos == "windows" || ctx.goos == "linux" {
+		// 缺哪个补哪个（字符串包含判断即可）
+		if !strings.Contains(cxx, "-D_LARGEFILE_SOURCE") {
+			cxx += " -D_LARGEFILE_SOURCE"
+		}
+		if !strings.Contains(cxx, "-D_LARGEFILE64_SOURCE") {
+			cxx += " -D_LARGEFILE64_SOURCE"
+		}
+		if !strings.Contains(cxx, "-D_FILE_OFFSET_BITS=64") {
+			cxx += " -D_FILE_OFFSET_BITS=64"
 		}
 	}
-	libFlags := strings.Join(libs, " ")
+	ld = strings.TrimSpace(ld)
 
-	switch ctx.goos {
-	case "windows":
-		fmt.Fprintf(
-			f,
-			"// #cgo %s LDFLAGS: -mwindows %s -lglu32 -lopengl32 -lgdiplus -lole32 -luuid -lcomctl32 -lws2_32 -lwinspool\n",
-			cgoCondOSArch, libFlags,
-		)
-
-	case "darwin":
-		fmt.Fprintf(
-			f,
-			"// #cgo %s LDFLAGS: %s -lm -lpthread -framework Cocoa -framework OpenGL -framework UniformTypeIdentifiers\n",
-			cgoCondOSArch, libFlags,
-		)
-
-	case "linux":
-		fmt.Fprintf(
-			f,
-			"// #cgo %s LDFLAGS: %s -lX11 -lXext -lXinerama -lXcursor -lXrender -lXfixes -lXft -lfontconfig -lfreetype -lGL -lGLU -ldl -lpthread -lm\n",
-			cgoCondOSArch, libFlags,
-		)
-
-	default:
-		fmt.Fprintf(f, "// #cgo %s LDFLAGS: %s\n", cgoCondOSArch, libFlags)
+	// 3) macOS：weak_framework 兼容处理（保留你之前逻辑）
+	if ctx.goos == "darwin" {
+		ld = strings.ReplaceAll(ld, "-weak_framework UniformTypeIdentifiers", "-framework UniformTypeIdentifiers")
 	}
 
+	// ✅ 关键修正：补充 include 搜索路径，让 <FL/fl_config.h> 能找到
+	// fl_config.h 在：libs/fltk/<os>/<arch>/FL/fl_config.h
+	// 因此必须加：-I../libs/fltk/<os>/<arch>
+	finalRootFromSRCDIR := "${SRCDIR}/../" + filepath.ToSlash(ctx.finalRoot) // fltk_bridge/ -> repo root -> libs/fltk
+	extraIncludes := fmt.Sprintf(
+		"-I%s/include -I%s/%s/%s -I%s/include/FL/images",
+		finalRootFromSRCDIR, finalRootFromSRCDIR, ctx.goos, ctx.outArch, finalRootFromSRCDIR,
+	)
+
+	// 4) 输出 #cgo
+	// 注意：extraIncludes 放前面，避免 fltk-config 自己的 -I 顺序影响查找
+	fmt.Fprintf(f, "// #cgo %s CPPFLAGS: %s %s\n", cgoCondOSArch, extraIncludes, cxx)
+	fmt.Fprintf(f, "// #cgo %s CXXFLAGS: -std=%s\n", cgoCondOSArch, config.FLTKCppStandard)
+
+	if ctx.goos == "windows" && !strings.Contains(ld, "-mwindows") {
+		ld = "-mwindows " + ld
+	}
+
+	fmt.Fprintf(f, "// #cgo %s LDFLAGS: %s\n", cgoCondOSArch, ld)
 	fmt.Fprintln(f, `import "C"`)
+
 	fmt.Printf("Generated cgo file: %s\n", outPath)
 }
 
+// =======================
+// FS helpers
+// =======================
 func mustRemoveAll(path string) {
 	_ = os.RemoveAll(path)
 }
@@ -579,23 +569,108 @@ func copyDir(srcDir, dstDir string) {
 	}
 }
 
-func syncArtifactsToProjectRoot(ctx *buildCtx) {
-	// 目标：项目根（固定）
-	finalRoot := "."
-
-	// 1) include
+// ✅ 最终产物同步：统一落到 libs/fltk（全平台一致）
+func syncArtifactsToFinalRoot(ctx *buildCtx) {
+	// 1) include -> libs/fltk/include
 	srcInclude := filepath.Join(ctx.outputRoot, "include")
-	dstInclude := filepath.Join(finalRoot, "lib", "include")
+	dstInclude := filepath.Join(ctx.finalRoot, "include")
 	mustRemoveAll(dstInclude)
 	copyDir(srcInclude, dstInclude)
 
-	// 2) lib/<os>/<arch>
+	// 2) lib/<os>/<arch> -> libs/fltk/<os>/<arch>
 	srcLib := filepath.Join(ctx.outputRoot, "lib", ctx.goos, ctx.outArch)
-	dstLib := filepath.Join(finalRoot, "lib", ctx.goos, ctx.outArch)
+	dstLib := filepath.Join(ctx.finalRoot, ctx.goos, ctx.outArch)
 	mustRemoveAll(dstLib)
 	copyDir(srcLib, dstLib)
 }
 
+func cleanStagingInstall(ctx *buildCtx) {
+	_ = os.RemoveAll(ctx.outputRoot)
+}
+
+func mustFileExist(path string) {
+	if _, err := os.Stat(path); err != nil {
+		fmt.Printf("Missing required file: %s, %v\n", path, err)
+		os.Exit(1)
+	}
+}
+
+func mustChmodX(path string) {
+	st, err := os.Stat(path)
+	if err != nil {
+		fmt.Printf("Missing required file: %s, %v\n", path, err)
+		os.Exit(1)
+	}
+	if runtime.GOOS != "windows" {
+		_ = os.Chmod(path, st.Mode().Perm()|0111)
+	}
+}
+
+func fltkConfigPath(ctx *buildCtx) string {
+	return filepath.Join(ctx.cmakeBuild, "bin", "fltk-config")
+}
+
+func runFltkConfig(ctx *buildCtx, args ...string) string {
+	cfg := fltkConfigPath(ctx)
+	mustChmodX(cfg)
+
+	if ctx.goos == "windows" {
+		out := outputCmd("", "sh", append([]string{cfg}, args...)...)
+		return string(out)
+	}
+	out := outputCmd("", cfg, args...)
+	return string(out)
+}
+
+// ✅ 关键改动：rewrite 的 root 指向最终产物根 libs/fltk，而不是 ${SRCDIR}/..
+func rewritePathsForCgo(ctx *buildCtx, s string) string {
+	// cgo 文件在 fltk_bridge/ 下：${SRCDIR} = <repo>/fltk_bridge
+	// 最终产物在 <repo>/libs/fltk
+	root := "${SRCDIR}/../" + filepath.ToSlash(ctx.finalRoot)
+
+	// 统一成 forward slash，避免 windows 的 \ 干扰 Replace
+	ss := strings.ReplaceAll(s, "\\", "/")
+
+	// 计算 staging 的可能路径形态（相对 + 绝对 + 关键子目录）
+	outRel := filepath.ToSlash(filepath.Clean(ctx.outputRoot))
+
+	outAbs, _ := filepath.Abs(ctx.outputRoot)
+	outAbs = filepath.ToSlash(filepath.Clean(outAbs))
+
+	incAbs, _ := filepath.Abs(filepath.Join(ctx.outputRoot, "include"))
+	incAbs = filepath.ToSlash(filepath.Clean(incAbs))
+
+	libAbs, _ := filepath.Abs(filepath.Join(ctx.outputRoot, "lib", ctx.goos, ctx.outArch))
+	libAbs = filepath.ToSlash(filepath.Clean(libAbs))
+
+	wdAbs := filepath.ToSlash(filepath.Clean(ctx.currentDir))
+
+	// 依次替换（从更具体到更泛化）
+	repls := []string{
+		libAbs, root + "/" + filepath.ToSlash(filepath.Join(ctx.goos, ctx.outArch)),
+		incAbs, root + "/include",
+
+		outAbs, root,
+		outRel, root,
+
+		wdAbs, root,
+	}
+
+	for i := 0; i+1 < len(repls); i += 2 {
+		ss = strings.ReplaceAll(ss, repls[i], repls[i+1])
+	}
+
+	// 压一压空白
+	return strings.TrimSpace(ss)
+}
+
+func cleanCMakeBuildDir(ctx *buildCtx) {
+	_ = os.RemoveAll(ctx.cmakeBuild)
+}
+
+// =======================
+// macOS universal merge (保持原逻辑，只改目录到 libs/fltk/...)
+// =======================
 func mergeDarwinUniversal(ctx *buildCtx) {
 	if ctx.goos != "darwin" || ctx.outArch != "universal" {
 		return
@@ -603,7 +678,8 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 
 	fmt.Println("Merging macOS universal binaries (lipo)")
 
-	base := filepath.Join("lib", "darwin")
+	// ✅ 从最终目录合并（因为我们最终要落到 libs/fltk）
+	base := filepath.Join(ctx.finalRoot, "darwin")
 	arm64Dir := filepath.Join(base, "arm64")
 	amd64Dir := filepath.Join(base, "amd64")
 	universalDir := filepath.Join(base, "universal")
@@ -630,7 +706,6 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".a") {
 			continue
 		}
-
 		armLib := filepath.Join(arm64Dir, e.Name())
 		amdLib := filepath.Join(amd64Dir, e.Name())
 		outLib := filepath.Join(universalDir, e.Name())
@@ -640,150 +715,27 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 			os.Exit(1)
 		}
 
-		runCmd("", "lipo",
-			"-create",
-			armLib,
-			amdLib,
-			"-output",
-			outLib,
-		)
+		runCmd("", "lipo", "-create", armLib, amdLib, "-output", outLib)
 	}
 
-	// fl_config.h：任选一个（arm64 / amd64 内容几乎一致）
+	// fl_config.h：任选一个
 	srcCfg := filepath.Join(arm64Dir, "FL", "fl_config.h")
 	dstCfg := filepath.Join(universalDir, "FL", "fl_config.h")
 	copyFile(srcCfg, dstCfg, 0644)
 	normalizeTextLF(dstCfg)
 
 	mustFileExist(filepath.Join(universalDir, "libfltk.a"))
+
 	_ = os.RemoveAll(arm64Dir)
 	_ = os.RemoveAll(amd64Dir)
-	fmt.Println("Cleaned darwin thin libs: arm64/amd64 removed, kept universal only")
 
+	fmt.Println("Cleaned darwin thin libs: arm64/amd64 removed, kept universal only")
 	fmt.Println("macOS universal merge completed")
 }
 
-func orderedFltkStaticLibs(checkDirFromProjectRoot, emitRelFromSRCDIR string) []string {
-	ordered := []string{
-		"libfltk_images.a",
-		"libfltk_jpeg.a",
-		"libfltk_png.a",
-		"libfltk_z.a",
-		"libfltk_gl.a",
-		"libfltk_forms.a",
-		"libfltk.a",
-	}
-
-	// 1) 检查用：项目根下的真实目录（不带 ..）
-	baseDir := filepath.FromSlash(checkDirFromProjectRoot)
-
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		fmt.Printf("Error reading %s, %v\n", baseDir, err)
-		os.Exit(1)
-	}
-
-	allSet := map[string]bool{}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		n := e.Name()
-		if strings.HasPrefix(n, "libfltk") && strings.HasSuffix(n, ".a") {
-			allSet[n] = true
-		}
-	}
-
-	// 2) 输出用：写入 cgo 的相对路径（允许带 ..）
-	emitRel := filepath.ToSlash(emitRelFromSRCDIR)
-
-	var libs []string
-	for _, name := range ordered {
-		if !allSet[name] {
-			fmt.Printf("Missing required static lib: %s (dir: %s)\n", name, baseDir)
-			os.Exit(1)
-		}
-		libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(emitRel, name)))
-		delete(allSet, name)
-	}
-
-	if len(allSet) > 0 {
-		var extra []string
-		for name := range allSet {
-			extra = append(extra, name)
-		}
-		sort.Strings(extra)
-		for _, name := range extra {
-			libs = append(libs, "${SRCDIR}/"+filepath.ToSlash(filepath.Join(emitRel, name)))
-		}
-	}
-
-	return libs
-}
-
-func cleanStagingInstall(ctx *buildCtx) {
-	// 只清理本次目标会写入的路径，避免误删其他平台的产物
-	_ = os.RemoveAll(filepath.Join(ctx.outputRoot, "include"))
-	_ = os.RemoveAll(filepath.Join(ctx.outputRoot, "lib", ctx.goos, ctx.outArch))
-}
-
-func mustFileExist(path string) {
-	if _, err := os.Stat(path); err != nil {
-		fmt.Printf("Missing required file: %s, %v\n", path, err)
-		os.Exit(1)
-	}
-}
-
-func mustChmodX(path string) {
-	st, err := os.Stat(path)
-	if err != nil {
-		fmt.Printf("Missing required file: %s, %v\n", path, err)
-		os.Exit(1)
-	}
-	// 仅对非 windows 尝试 chmod +x
-	if runtime.GOOS != "windows" {
-		_ = os.Chmod(path, st.Mode().Perm()|0111)
-	}
-}
-
-func fltkConfigPath(ctx *buildCtx) string {
-	// 关键点：每个 arch 都用自己的 cmake build 目录下的 fltk-config
-	// 这样 arm64 / amd64 不会串
-	return filepath.Join(ctx.cmakeBuild, "bin", "fltk-config")
-}
-
-func runFltkConfig(ctx *buildCtx, args ...string) string {
-	cfg := fltkConfigPath(ctx)
-	mustChmodX(cfg)
-
-	// fltk-config 是个 shell 脚本：windows 下也优先走 sh（MinGW/Git-Bash 都有）
-	if ctx.goos == "windows" {
-		out := outputCmd("", "sh", append([]string{cfg}, args...)...)
-		return string(out)
-	}
-
-	out := outputCmd("", cfg, args...)
-	return string(out)
-}
-
-func rewritePathsForCgo(ctx *buildCtx, s string) string {
-	// cgo 文件在 fltk_bridge/ 下，项目根是 ${SRCDIR}/..
-	// 统一把绝对 prefix 替换到 ${SRCDIR}/..
-	//（你现在 install 到 outputRoot，然后又 copy 到项目根 lib/，所以要指向项目根）
-	root := "${SRCDIR}/.."
-
-	// fltk-config 里常出现 prefix=/abs/path/build/_install
-	s = strings.ReplaceAll(s, ctx.outputRoot, root)
-	s = strings.ReplaceAll(s, ctx.currentDir, root)
-
-	// 保险：把多余换行/空格规范一下
-	return strings.TrimSpace(s)
-}
-
-func cleanCMakeBuildDir(ctx *buildCtx) {
-	_ = os.RemoveAll(ctx.cmakeBuild)
-}
-
+// =======================
+// 主流程
+// =======================
 func buildStaticLibs(ctx *buildCtx) {
 	prepareDirs(ctx)
 
@@ -797,12 +749,18 @@ func buildStaticLibs(ctx *buildCtx) {
 	cleanStagingInstall(ctx)
 	runCMakeInstall(ctx)
 
+	// fl_config.h 从 include/FL -> staging <os>/<arch>/FL
 	moveFlConfigHeader(ctx)
-	syncArtifactsToProjectRoot(ctx)
 
+	// ✅ staging -> final: libs/fltk/include + libs/fltk/lib/<os>/<arch>
+	syncArtifactsToFinalRoot(ctx)
+
+	// ✅ 校验最终产物
+	mustFileExist(filepath.Join(ctx.finalRoot, ctx.goos, ctx.outArch, "FL", "fl_config.h"))
+	mustFileExist(filepath.Join(ctx.finalRoot, ctx.goos, ctx.outArch, "libfltk.a"))
+
+	// 你原来的 manifest 写入保留（如果你项目里有这个函数）
 	writeManifestForTarget(ctx, ctx.goos, ctx.outArch)
-
-	mustFileExist(filepath.Join("lib", ctx.goos, ctx.outArch, "FL", "fl_config.h"))
 }
 
 func main() {
@@ -811,12 +769,15 @@ func main() {
 	mustCheckTool("cmake")
 
 	if runtime.GOOS == "darwin" {
-
+		// 先产出薄库到 libs/fltk/darwin/{arm64,amd64}
 		buildStaticLibs(newBuildCtx("arm64", "arm64"))
 		buildStaticLibs(newBuildCtx("amd64", "amd64"))
 
+		// 再合并成 universal 到 libs/fltk/darwin/universal
 		ctxUni := newBuildCtx("arm64", "universal")
 		mergeDarwinUniversal(ctxUni)
+
+		// manifest + cgo
 		writeManifestForTarget(ctxUni, "darwin", "universal")
 		generateCgo(ctxUni)
 
@@ -829,6 +790,5 @@ func main() {
 	buildStaticLibs(ctx)
 	generateCgo(ctx)
 
-	fmt.Printf("Successfully generated libraries for OS: %s, architecture: %s\n",
-		ctx.goos, ctx.goarch)
+	fmt.Printf("Successfully generated libraries for OS: %s, architecture: %s\n", ctx.goos, ctx.goarch)
 }

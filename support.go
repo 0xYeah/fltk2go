@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed lib/**/**/fltk2go.manifest.json
+//go:embed libs/fltk/**/**/fltk2go.manifest.json
 var manifestsFS embed.FS
 
 type Manifest struct {
