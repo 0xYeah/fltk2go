@@ -29,7 +29,7 @@ func main() {
 	win := window.NewUIWindow(600, 400, "Counter")
 	root := win.RootView()
 
-	title := label.NewUILabel(&foundation.Rect{X: 20, Y: 20, Width: 560, Height: 40}, "你点击了 0 次")
+	title := label.NewUILabel(&foundation.Rect{X: 20, Y: 20, Width: 560, Height: 40}, "Clicked 0 count")
 	title.SetFontSize(20)
 	title.SetTextColor(GRAY)
 
