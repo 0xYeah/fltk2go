@@ -9,13 +9,8 @@
 - [6. used tools](#6-used-tools)
   - [6.1. tree](#61-tree)
     - [6.1.1. list projects](#611-list-projects)
-  - [6.2. changeLog Tool git-cliff](#62-changelog-tool-git-cliff)
-    - [6.2.1. Usage](#621-usage)
-    - [6.2.2. Windows-Install](#622-windows-install)
-    - [6.2.3. Mac-Install](#623-mac-install)
-    - [6.2.4. Linux-Install](#624-linux-install)
-  - [6.3. commit message style](#63-commit-message-style)
-  - [6.4. use git-cliff example](#64-use-git-cliff-example)
+  - [Depends](#depends)
+    - [Linux](#linux)
 
 <!-- /TOC -->
 
@@ -73,4 +68,17 @@ func main() {
 ### 6.1.1. list projects
 ```shell
 tree -I ".git|build|lib"
+```
+
+## Depends
+### Linux
+```
+apt update
+apt install -y \
+  build-essential cmake pkg-config \
+  libx11-dev libxext-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev \
+  libxft-dev \
+  libgl1-mesa-dev libglu1-mesa-dev \
+  mesa-common-dev
+
 ```
