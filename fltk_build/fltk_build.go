@@ -545,8 +545,12 @@ func generateCgo(ctx *buildCtx) {
 	cppflags := strings.TrimSpace(strings.Join([]string{incArch, incBase, incImg, cxx}, " "))
 
 	// Windows：保持 -mwindows（也去重）
-	if ctx.goos == "windows" && !strings.Contains(ld, "-mwindows") {
-		ld = "-mwindows " + ld
+	if ctx.goos == "windows" {
+		ld = removeTokens(ld, "-lfontconfig")
+
+		if !strings.Contains(ld, "-mwindows") {
+			ld = "-mwindows " + ld
+		}
 	}
 
 	// 输出 #cgo
@@ -556,6 +560,22 @@ func generateCgo(ctx *buildCtx) {
 	fmt.Fprintln(f, `import "C"`)
 
 	fmt.Printf("Generated cgo file: %s\n", outPath)
+}
+
+func removeTokens(s string, bad ...string) string {
+	rm := make(map[string]struct{}, len(bad))
+	for _, b := range bad {
+		rm[strings.TrimSpace(b)] = struct{}{}
+	}
+	toks := strings.Fields(s)
+	out := make([]string, 0, len(toks))
+	for _, t := range toks {
+		if _, ok := rm[t]; ok {
+			continue
+		}
+		out = append(out, t)
+	}
+	return strings.Join(out, " ")
 }
 
 // =======================
