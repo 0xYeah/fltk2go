@@ -3,12 +3,13 @@ package fltk2go
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"sort"
 	"strings"
 )
 
-//go:embed libs/fltk/**/**/fltk2go.manifest.json
+//go:embed libs/*/*/*/*.manifest.json
 var manifestsFS embed.FS
 
 type Manifest struct {
@@ -28,21 +29,45 @@ type Manifest struct {
 		HasFlConfig bool     `json:"has_fl_config"`
 	} `json:"artifacts"`
 }
-type SupportedLibrary struct {
+type Library struct {
 	GOOS        string
 	Arch        string
 	FLTKVersion string
 	Libraries   []string
 }
 
+func extractLibNameFromManifestPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("empty path")
+	}
+	path = strings.ReplaceAll(path, "\\", "/")
+
+	segs := make([]string, 0, 8)
+	for _, p := range strings.Split(path, "/") {
+		if p != "" {
+			segs = append(segs, p)
+		}
+	}
+
+	if len(segs) < 2 {
+		return "", fmt.Errorf("invalid manifest path: %q", path)
+	}
+	if segs[0] != "libs" {
+		return "", fmt.Errorf("unexpected manifest root %q (want libs): %q", segs[0], path)
+	}
+
+	return segs[1], nil
+}
+
 // GetSupportedLibraries returns all FLTK static library bundles
 // embedded in this fltk2go module.
-func GetSupportedLibraries() ([]SupportedLibrary, error) {
-	var result []SupportedLibrary
+func GetSupportedLibraries() (map[string][]Library, error) {
+	result := make(map[string][]Library)
 
-	err := fs.WalkDir(manifestsFS, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	err := fs.WalkDir(manifestsFS, ".", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
 		if d.IsDir() {
 			return nil
@@ -61,26 +86,35 @@ func GetSupportedLibraries() ([]SupportedLibrary, error) {
 			return err
 		}
 
-		result = append(result, SupportedLibrary{
+		libName, err := extractLibNameFromManifestPath(path)
+		if err != nil {
+			// 建议：这里直接返回错误，避免 silently 丢数据
+			return err
+		}
+
+		item := Library{
 			GOOS:        m.Target.GOOS,
 			Arch:        m.Target.OutArch,
 			FLTKVersion: m.FLTKVersion,
-			Libraries:   append([]string{}, m.Artifacts.Libs...), // defensive copy
-		})
+			Libraries:   append([]string(nil), m.Artifacts.Libs...), // defensive copy
+		}
+
+		result[libName] = append(result[libName], item)
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
-	// 稳定排序，方便输出 / 测试
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].GOOS != result[j].GOOS {
-			return result[i].GOOS < result[j].GOOS
-		}
-		return result[i].Arch < result[j].Arch
-	})
+	for name := range result {
+		sort.Slice(result[name], func(i, j int) bool {
+			a, b := result[name][i], result[name][j]
+			if a.GOOS != b.GOOS {
+				return a.GOOS < b.GOOS
+			}
+			return a.Arch < b.Arch
+		})
+	}
 
 	return result, nil
 }
