@@ -107,7 +107,7 @@ function git_handle_ready() {
 }
 
 function find_prev_release_commit() {
-    git log --grep='^Release:--:' --format='%H' -n 1 HEAD || true
+    git log --fixed-strings --grep='Release:--:' --format='%H' -n 1 HEAD || true
 }
 
 function gen_changelog_if_possible() {
@@ -171,9 +171,7 @@ function gen_changelog_if_possible() {
         if [[ "${commit_count}" == "0" ]]; then
             echo "- (no commits between releases)"
         else
-            # 按时间正序列出，便于读
-            # 你要保留 merge 也行，把 --no-merges 去掉
-            git log --reverse --no-merges --date=short --pretty=format:"- %ad %h %s" "${range}" || true
+            git log --reverse --date=short --pretty=format:"- %ad %h %s" "${range}" || true
         fi
         echo
     } > "${out_file}"
