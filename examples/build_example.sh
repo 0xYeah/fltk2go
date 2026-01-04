@@ -30,14 +30,85 @@ GetOSType() {
 }
 GetOSType
 
-function getLibVersion() {
-    local lib=$1
-    version=$(grep "${lib}" go.mod | awk '{print $2}')
-    if [ -z "$version" ]; then
-        echo "Version not found for ${lib} in go.mod!"
-        exit 1
+
+function find_msys2_mingw64_path() {
+    # ---- helper: normalize path to MSYS style (/c/xxx) ----
+    norm_msys_path() {
+      local p="$1"
+      if [[ -z "$p" ]]; then
+        echo ""
+        return 0
+      fi
+
+      # If cygpath exists, it handles all conversions robustly
+      if command -v cygpath >/dev/null 2>&1; then
+        # cygpath -u: windows -> unix(/c/..), unix stays unix
+        cygpath -u "$p"
+        return 0
+      fi
+
+      # Fallback: convert "C:\msys64" or "C:/msys64" to "/c/msys64"
+      if [[ "$p" =~ ^([A-Za-z]):[\\/](.*)$ ]]; then
+        local drive="${BASH_REMATCH[1]}"
+        local rest="${BASH_REMATCH[2]}"
+        drive="$(echo "$drive" | tr 'A-Z' 'a-z')"
+        rest="${rest//\\//}"
+        echo "/${drive}/${rest}"
+        return 0
+      fi
+
+      # already like /c/msys64
+      echo "$p"
+    }
+
+    # ---- discover root ----
+    local root="${MSYS2_ROOT:-${MSYS_ROOT:-}}"
+    root="$(norm_msys_path "$root")"
+
+    if [[ -z "$root" ]]; then
+      for d in /c/msys64 /d/msys64 /e/msys64; do
+        if [[ -x "$d/usr/bin/bash.exe" ]]; then
+          root="$d"
+          break
+        fi
+      done
     fi
-    echo "$version"
+
+    [[ -n "$root" ]] || { echo "[err] MSYS2 not found. Please install MSYS2 or set MSYS2_ROOT."; exit 1; }
+    [[ -d "$root/mingw64/bin" ]] || { echo "[err] Invalid MSYS2_ROOT: $root (missing mingw64/bin)"; exit 1; }
+    [[ -d "$root/usr/bin" ]] || { echo "[err] Invalid MSYS2_ROOT: $root (missing usr/bin)"; exit 1; }
+
+    # only this process: pin MSYS2 runtime/toolchain to the front
+    export MSYS2_ROOT="$root"
+    export PATH="$MSYS2_ROOT/mingw64/bin:$MSYS2_ROOT/usr/bin:$PATH"
+    hash -r
+
+    # ---- strict toolchain check: must resolve under MSYS2_ROOT/mingw64/bin ----
+    local t p
+    for t in gcc cc windres cmake mingw32-make; do
+      p="$(command -v "$t" 2>/dev/null || true)"
+      [[ -n "$p" ]] || { echo "[err] required tool not found: $t"; exit 1; }
+
+      # normalize resolved path as well (some shells may return C:\... or /c/...)
+      p="$(norm_msys_path "$p")"
+
+      case "$p" in
+        "$MSYS2_ROOT"/mingw64/bin/*) : ;;
+        *) echo "[err] $t resolved to '$p' (expected under $MSYS2_ROOT/mingw64/bin). refuse."; exit 1 ;;
+      esac
+    done
+
+    # ---- hard probe: windows.h must preprocess ----
+    printf '#include <windows.h>\nint x;\n' > .__probe.c
+    gcc -E .__probe.c -o /dev/null >/dev/null 2>&1 || {
+      rm -f .__probe.c
+      echo "[err] MSYS2 gcc preprocessing failed (windows.h)."
+      exit 1
+    }
+    rm -f .__probe.c
+
+    export MSYS2_WINDRES="$(command -v windres)"
+    export MSYS2_GCC="$(command -v gcc)"
 }
 
 function toBuild() {
@@ -104,13 +175,16 @@ function toBuild() {
         fi
     elif [[ "$OS_TYPE" == "Windows" ]]; then
 
+      find_msys2_mingw64_path
       # Build for Windows x64
       mkdir -p ${build_path}/${RUN_MODE}/windows/amd64
 
       generate_windows_package_file
 
       # x86_64-w64-mingw32-windres -i main.rc -o main.syso -O coff
-      windres -i main.rc -o main.syso -O coff
+#      windres -i main.rc -o main.syso -O coff
+      "$MSYS2_WINDRES" -i main.rc -o main.syso -O coff
+
       CGO_LDFLAGS="-static -static-libgcc -static-libstdc++ -lglu32 -lopengl32 -lgdiplus -lole32 -luuid -lcomctl32 -lws2_32 -lmsvcrt"
 
       CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CGO_LDFLAGS=$CGO_LDFLAGS go build -a -trimpath -ldflags "${ld_flag_master} -H windowsgui -w -s" -o ${build_path}/${RUN_MODE}/windows/amd64/${product_name}.exe
