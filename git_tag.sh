@@ -179,6 +179,18 @@ function gen_changelog_if_possible() {
     } > "${out_file}"
 
     echo "[changelog] wrote ${out_file}"
+
+    if [ -n "${del_version_no}" ]; then
+        local pre_file="${out_dir}/v${del_version_no}.md"
+        if [ -f "${pre_file}" ]; then
+            if git ls-files --error-unmatch "${pre_file}" >/dev/null 2>&1; then
+                git rm -f "${pre_file}"
+            else
+                rm -f "${pre_file}" 2>/dev/null || true
+            fi
+            echo "[changelog] removed ${pre_file}"
+        fi
+    fi
 }
 
 function git_handle_push() {
