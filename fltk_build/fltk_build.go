@@ -77,6 +77,8 @@ type buildCtx struct {
 	cmakeBuild string
 
 	currentDir string
+
+	env []string
 }
 
 func mustCheckEnv() {
@@ -120,13 +122,11 @@ func newBuildCtx(goarch, outArch string) *buildCtx {
 	outputRoot := filepath.Clean(OutputRoot)
 	buildRoot := filepath.Clean(FLTKBuildRoot)
 
-	// staging install: build/_install/lib/<os>/<arch>
 	libdir := filepath.Join(outputRoot, "lib", goos, outArch)
 	includeDir := filepath.Join(outputRoot, "include")
-
 	finalRoot := filepath.Clean(FinalRoot)
 
-	return &buildCtx{
+	ctx := &buildCtx{
 		goos:       goos,
 		goarch:     goarch,
 		outArch:    outArch,
@@ -137,11 +137,41 @@ func newBuildCtx(goarch, outArch string) *buildCtx {
 
 		buildRoot:  buildRoot,
 		fltkSource: filepath.Join(buildRoot, "fltk"),
-		// 必须按 arch 隔离，否则一定踩坑
 		cmakeBuild: filepath.Join(buildRoot, fmt.Sprintf("fltk-cmake-%s-%s", goos, outArch)),
-
 		currentDir: mustGetwd(),
 	}
+
+	if goos == "windows" {
+		msys := os.Getenv("MSYS2_ROOT")
+		if msys == "" {
+			msys = `C:\msys64`
+		}
+
+		mingwBin := filepath.Join(msys, "mingw64", "bin")
+		usrBin := filepath.Join(msys, "usr", "bin")
+
+		// 你要求“找不到就报错不执行后续”
+		mustFileExist(filepath.Join(mingwBin, "gcc.exe"))
+		mustFileExist(filepath.Join(mingwBin, "g++.exe"))
+		mustFileExist(filepath.Join(mingwBin, "mingw32-make.exe"))
+		mustFileExist(filepath.Join(mingwBin, "windres.exe"))
+
+		// cmake 可能来自系统，也可能来自 msys2；你当前日志是 C:/msys64/mingw64/bin/cmake.exe
+		// 这里不强制，但建议你装在 MSYS2 里就也校验一下：
+		// mustFileExist(filepath.Join(mingwBin, "cmake.exe"))
+
+		oldPath := os.Getenv("PATH")
+		// Windows PATH 用 ';'
+		newPath := mingwBin + ";" + usrBin + ";" + oldPath
+
+		ctx.env = append(os.Environ(),
+			"PATH="+newPath,
+			"MSYSTEM=MINGW64",
+			"CHERE_INVOKING=1",
+		)
+	}
+
+	return ctx
 }
 
 func prepareDirs(ctx *buildCtx) {
@@ -156,23 +186,31 @@ func prepareDirs(ctx *buildCtx) {
 // =======================
 // Command helpers
 // =======================
-func runCmd(dir string, name string, args ...string) {
+func runCmd(ctx *buildCtx, dir string, name string, args ...string) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if ctx != nil && len(ctx.env) > 0 {
+		cmd.Env = ctx.env
+	}
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error running command: %s %s, %v\n", name, strings.Join(args, " "), err)
 		os.Exit(1)
 	}
 }
 
-func outputCmd(dir string, name string, args ...string) []byte {
+func outputCmd(ctx *buildCtx, dir string, name string, args ...string) []byte {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	out, err := cmd.Output()
+	if ctx != nil && len(ctx.env) > 0 {
+		cmd.Env = ctx.env
+	}
+
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("Error running command: %s %s, %v\n", name, strings.Join(args, " "), err)
+		fmt.Printf("Error running command: %s %s\n%s\n%v\n",
+			name, strings.Join(args, " "), string(out), err)
 		os.Exit(1)
 	}
 	return out
@@ -185,7 +223,7 @@ func ensureFltkSource(ctx *buildCtx) {
 	stat, err := os.Stat(ctx.fltkSource)
 	if errors.Is(err, fs.ErrNotExist) {
 		fmt.Println("Cloning FLTK repository")
-		runCmd(ctx.buildRoot, "git", "clone", "https://github.com/fltk/fltk.git")
+		runCmd(ctx, ctx.buildRoot, "git", "clone", "https://github.com/fltk/fltk.git")
 		return
 	}
 	if err != nil {
@@ -200,13 +238,13 @@ func ensureFltkSource(ctx *buildCtx) {
 	fmt.Println("Found existing FLTK directory")
 
 	if ctx.goos == "windows" {
-		runCmd(ctx.fltkSource, "git", "checkout", "src/Fl_win32.cxx")
+		runCmd(ctx, ctx.fltkSource, "git", "checkout", "src/Fl_win32.cxx")
 	}
-	runCmd(ctx.fltkSource, "git", "fetch")
+	runCmd(ctx, ctx.fltkSource, "git", "fetch")
 }
 
 func checkoutTargetVersion(ctx *buildCtx) {
-	runCmd(ctx.fltkSource, "git", "checkout", config.FLTKPreBuildVersion)
+	runCmd(ctx, ctx.fltkSource, "git", "checkout", config.FLTKPreBuildVersion)
 }
 
 func applyWindowsPatchIfNeeded(ctx *buildCtx) {
@@ -225,7 +263,7 @@ func applyWindowsPatchIfNeeded(ctx *buildCtx) {
 		os.Exit(1)
 	}
 
-	runCmd(ctx.fltkSource, "git", "apply", patchAbs)
+	runCmd(ctx, ctx.fltkSource, "git", "apply", patchAbs)
 }
 
 // =======================
@@ -286,19 +324,23 @@ func runCMakeConfigure(ctx *buildCtx) {
 		}
 	}
 
-	runCmd("", "cmake", args...)
+	runCmd(ctx, "", "cmake", args...)
 }
 
 func runCMakeBuild(ctx *buildCtx) {
+	if ctx.goos == "windows" {
+		runCmd(ctx, "", "cmake", "--build", ctx.cmakeBuild, "--verbose", "--parallel", "1")
+		return
+	}
 	args := []string{"--build", ctx.cmakeBuild, "--parallel"}
 	if ctx.goos == "openbsd" {
 		args = []string{"--build", ctx.cmakeBuild}
 	}
-	runCmd("", "cmake", args...)
+	runCmd(ctx, "", "cmake", args...)
 }
 
 func runCMakeInstall(ctx *buildCtx) {
-	runCmd("", "cmake", "--install", ctx.cmakeBuild)
+	runCmd(ctx, "", "cmake", "--install", ctx.cmakeBuild)
 }
 
 // =======================
@@ -712,10 +754,10 @@ func runFltkConfig(ctx *buildCtx, args ...string) string {
 		}
 		// 用绝对路径的sh.exe调用，解决Goland调试路径问题
 		cmdArgs := append([]string{"-c", fmt.Sprintf("\"%s\" %s", cfg, strings.Join(args, " "))})
-		out := outputCmd("", shPath, cmdArgs...)
+		out := outputCmd(ctx, "", shPath, cmdArgs...)
 		return string(out)
 	}
-	out := outputCmd("", cfg, args...)
+	out := outputCmd(ctx, "", cfg, args...)
 	return string(out)
 }
 
@@ -812,7 +854,7 @@ func mergeDarwinUniversal(ctx *buildCtx) {
 			os.Exit(1)
 		}
 
-		runCmd("", "lipo", "-create", armLib, amdLib, "-output", outLib)
+		runCmd(ctx, "", "lipo", "-create", armLib, amdLib, "-output", outLib)
 	}
 
 	// fl_config.h：任选一个
