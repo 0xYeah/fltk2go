@@ -33,7 +33,7 @@ func main() {
 	title.SetFontSize(20)
 	title.SetTextColor(GRAY)
 
-	btn := button.NewUIButton(&foundation.Rect{X: 20, Y: 80, Width: 160, Height: 44}, "点我 +1")
+	btn := button.NewUIButton(&foundation.Rect{X: 20, Y: 80, Width: 160, Height: 44}, "Click Me +1")
 	btn.SetBackgroundColor(BLUE)
 
 	count := 0
