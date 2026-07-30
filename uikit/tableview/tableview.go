@@ -121,6 +121,15 @@ func (tv *TableView) SetHeaderHeight(h int) {
 	}
 }
 
+// SetBackgroundColor sets the table viewport background, including the empty
+// area below the last row.
+func (tv *TableView) SetBackgroundColor(color fltk_bridge.Color) {
+	if tv != nil && tv.table != nil {
+		tv.table.SetBackgroundColor(color)
+		tv.table.Redraw()
+	}
+}
+
 // SetCustomDraw sets a custom cell-drawing function called for every visible row.
 // When set, it replaces the default DataSource-driven cell drawing.
 func (tv *TableView) SetCustomDraw(fn func(ctx fltk_bridge.TableContext, row, col, x, y, w, h int)) {

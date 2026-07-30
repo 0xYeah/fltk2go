@@ -7,10 +7,11 @@ import (
 )
 
 type fakeBridgeTable struct {
-	rows    int
-	redraws int
-	draw    func(ctx fltk_bridge.TableContext, row, col int, x, y, w, h int)
-	event   func(row int) bool
+	rows       int
+	redraws    int
+	background fltk_bridge.Color
+	draw       func(ctx fltk_bridge.TableContext, row, col int, x, y, w, h int)
+	event      func(row int) bool
 }
 
 func (f *fakeBridgeTable) SetRows(rows int) { f.rows = rows }
@@ -18,14 +19,25 @@ func (f *fakeBridgeTable) Redraw()          { f.redraws++ }
 func (f *fakeBridgeTable) SetDrawCellHandler(fn func(ctx fltk_bridge.TableContext, row, col int, x, y, w, h int)) {
 	f.draw = fn
 }
-func (f *fakeBridgeTable) SetEventHandler(fn func(row int) bool) { f.event = fn }
-func (f *fakeBridgeTable) GetSelectedRow() int                   { return 3 }
-func (f *fakeBridgeTable) Widget() fltk_bridge.Widget            { return nil }
-func (f *fakeBridgeTable) SetColumnCount(int)                    {}
-func (f *fakeBridgeTable) SetColumnWidth(int, int)               {}
-func (f *fakeBridgeTable) AllowColumnResizing()                  {}
-func (f *fakeBridgeTable) EnableColumnHeaders()                  {}
-func (f *fakeBridgeTable) SetColumnHeaderHeight(int)             {}
+func (f *fakeBridgeTable) SetEventHandler(fn func(row int) bool)      { f.event = fn }
+func (f *fakeBridgeTable) GetSelectedRow() int                        { return 3 }
+func (f *fakeBridgeTable) Widget() fltk_bridge.Widget                 { return nil }
+func (f *fakeBridgeTable) SetColumnCount(int)                         {}
+func (f *fakeBridgeTable) SetColumnWidth(int, int)                    {}
+func (f *fakeBridgeTable) AllowColumnResizing()                       {}
+func (f *fakeBridgeTable) EnableColumnHeaders()                       {}
+func (f *fakeBridgeTable) SetColumnHeaderHeight(int)                  {}
+func (f *fakeBridgeTable) SetBackgroundColor(color fltk_bridge.Color) { f.background = color }
+
+func TestSetBackgroundColorForwardsToBridge(t *testing.T) {
+	bridge := &fakeBridgeTable{}
+	tv := newWithBridgeTable(bridge)
+	want := fltk_bridge.Color(0x12345600)
+	tv.SetBackgroundColor(want)
+	if bridge.background != want {
+		t.Fatalf("background = %#x, want %#x", bridge.background, want)
+	}
+}
 
 type sliceDataSource struct {
 	rows  int

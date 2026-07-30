@@ -16,6 +16,7 @@ type BridgeTable interface {
 	AllowColumnResizing()
 	EnableColumnHeaders()
 	SetColumnHeaderHeight(h int)
+	SetBackgroundColor(color fltk_bridge.Color)
 }
 
 func newBridgeTable(x, y, w, h int) (BridgeTable, error) {

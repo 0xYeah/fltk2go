@@ -82,6 +82,12 @@ func (bt *bridgeTableImpl) SetColumnHeaderHeight(h int) {
 	bt.table.SetColumnHeaderHeight(h)
 }
 
+func (bt *bridgeTableImpl) SetBackgroundColor(color fltk_bridge.Color) {
+	if bt != nil && bt.table != nil {
+		bt.table.SetColor(color)
+	}
+}
+
 // SetEventHandler 设置处理事件的回调函数
 func (bt *bridgeTableImpl) SetEventHandler(fn func(row int) bool) {
 	bt.eventHandler = fn
