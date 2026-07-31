@@ -7,9 +7,10 @@ import (
 )
 
 type UIDropdown struct {
-	v       view.UIView
-	raw     *fltk_bridge.Choice
-	options []string
+	v                  view.UIView
+	raw                *fltk_bridge.Choice
+	options            []string
+	onSelectionChanged func(index int, option string)
 }
 
 func NewUIDropdown(r *foundation.Rect) *UIDropdown {
@@ -33,9 +34,14 @@ func (dd *UIDropdown) Raw() *fltk_bridge.Choice { return dd.raw }
 
 func (dd *UIDropdown) SetOptions(options []string) {
 	dd.raw.Clear()
-	dd.options = options
-	for _, opt := range options {
-		dd.raw.Add(opt, nil)
+	dd.options = append(dd.options[:0], options...)
+	for index, opt := range dd.options {
+		index, opt := index, opt
+		// Fl_Choice dispatches the selected menu item's callback instead of
+		// the parent widget callback when items have callbacks. Wire each item
+		// to the dropdown-level handler so real native popup selections notify
+		// consumers consistently.
+		dd.raw.Add(opt, func() { dd.selectOption(index) })
 	}
 	if len(options) > 0 {
 		dd.raw.SetValue(0)
@@ -65,14 +71,17 @@ func (dd *UIDropdown) SetSelectedIndex(index int) {
 }
 
 func (dd *UIDropdown) OnSelectionChanged(cb func(index int, option string)) {
-	dd.raw.SetCallback(func() {
-		idx := dd.SelectedIndex()
-		opt := ""
-		if idx >= 0 && idx < len(dd.options) {
-			opt = dd.options[idx]
-		}
-		cb(idx, opt)
-	})
+	dd.onSelectionChanged = cb
+}
+
+func (dd *UIDropdown) selectOption(index int) {
+	if index < 0 || index >= len(dd.options) {
+		return
+	}
+	dd.raw.SetValue(index)
+	if dd.onSelectionChanged != nil {
+		dd.onSelectionChanged(index, dd.options[index])
+	}
 }
 
 // On 绑定事件
