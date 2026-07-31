@@ -11,6 +11,7 @@ public:
 };
 class WidgetWithResizeHandler {
 public:
+  virtual void set_pre_resize_handler(uintptr_t handlerId) = 0;
   virtual void set_resize_handler(uintptr_t handlerId) = 0;
 };
 class WidgetWithDrawHandler {
@@ -59,6 +60,9 @@ public:
   }    
     
   void resize(int x, int y, int w, int h) final {
+    if (m_preResizeHandlerId != 0) {
+      _go_callbackHandler(m_preResizeHandlerId);
+    }
     BaseWidget::resize(x, y, w, h);
     if (m_resizeHandlerId != 0) {
       _go_callbackHandler(m_resizeHandlerId);
@@ -78,6 +82,10 @@ public:
     m_resizeHandlerId = handlerId;
   }
 
+  void set_pre_resize_handler(uintptr_t handlerId) final {
+    m_preResizeHandlerId = handlerId;
+  }
+
   void add_deletion_handler(uintptr_t handlerId) final {
     m_deletionHandlerIds.push_back(handlerId);
   }
@@ -86,5 +94,6 @@ protected:
   int m_eventHandlerId = -1;
   uintptr_t m_drawHandlerId = 0;
   uintptr_t m_resizeHandlerId = 0;
+  uintptr_t m_preResizeHandlerId = 0;
   std::vector<uintptr_t> m_deletionHandlerIds;
 };

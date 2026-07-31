@@ -1,6 +1,10 @@
 package view
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/0xdevelop/fltk2go/fltk_bridge"
+)
 
 func TestAutomationRegistryActionsAndSnapshot(t *testing.T) {
 	var clicked bool
@@ -89,6 +93,44 @@ func TestAutomationIDLifecycleAndChildren(t *testing.T) {
 	parent.ClearAutomationChildren()
 	if node := parent.AutomationSnapshot(); len(node.Children) != 0 {
 		t.Fatalf("children after clear = %#v", node.Children)
+	}
+}
+
+func TestAutomationUnregistersWhenNativeWidgetIsDestroyed(t *testing.T) {
+	raw := fltk_bridge.NewGroup(0, 0, 100, 100)
+	raw.End()
+	v := &UIView{}
+	v.BindRaw(raw)
+	v.SetAutomationID("destroyed.native.view")
+
+	raw.Destroy()
+	fltk_bridge.Check()
+	if _, ok := AutomationLookup("destroyed.native.view"); ok {
+		t.Fatal("destroyed native view remains in automation registry")
+	}
+	// A stale native node must never make global snapshot panic.
+	_ = AutomationSnapshot()
+	if v.Raw() != nil || v.Superview() != nil {
+		t.Fatal("destroyed view retained raw widget or host")
+	}
+}
+
+func TestAutomationDeletionRemovesChildFromParentsAndHandlers(t *testing.T) {
+	parent := &UIView{}
+	raw := fltk_bridge.NewGroup(0, 0, 100, 100)
+	raw.End()
+	child := &UIView{}
+	child.BindRaw(raw)
+	child.SetAutomationID("destroyed.automation.child")
+	child.SetAutomationTextHandlers(nil, func() (string, bool) {
+		panic("stale automation handler called")
+	})
+	parent.AddAutomationChild(child)
+
+	raw.Destroy()
+	fltk_bridge.Check()
+	if children := parent.AutomationSnapshot().Children; len(children) != 0 {
+		t.Fatalf("destroyed automation child remained: %#v", children)
 	}
 }
 

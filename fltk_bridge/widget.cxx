@@ -2,6 +2,7 @@
 
 #include <FL/Fl.H>
 #include <FL/Fl_Widget.H>
+#include <FL/Fl_Window.H>
 
 #include "callbacks.h"
 #include "enumerations.h"
@@ -55,6 +56,14 @@ int go_fltk_Widget_set_resize_handler(Fl_Widget* w, uintptr_t id) {
     return 0;
   }
   wh->set_resize_handler(id);
+  return 1;
+}
+int go_fltk_Widget_set_pre_resize_handler(Fl_Widget* w, uintptr_t id) {
+  WidgetWithResizeHandler* wh = dynamic_cast<WidgetWithResizeHandler*>(w);
+  if (wh == nullptr) {
+    return 0;
+  }
+  wh->set_pre_resize_handler(id);
   return 1;
 }
 int go_fltk_Widget_set_draw_handler(Fl_Widget* w, uintptr_t id) {
@@ -187,6 +196,12 @@ void go_fltk_Widget_set_tooltip(Fl_Widget *w, const char *tooltip) {
 }  
 Fl_Group *go_fltk_Widget_parent(Fl_Widget *w) {
     return w->parent();
+}
+int go_fltk_Widget_set_window_cursor(Fl_Widget *w, int cursor) {
+    Fl_Window *window = w->window();
+    if (!window) return 0;
+    window->cursor((Fl_Cursor)cursor);
+    return 1;
 }
 int go_fltk_Widget_take_focus(Fl_Widget *w) {
     return w->take_focus();

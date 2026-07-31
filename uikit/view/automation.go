@@ -28,6 +28,7 @@ type automationState struct {
 	getText  func() (string, bool)
 	getValue func() (string, bool)
 	children []*UIView
+	parents  map[*UIView]struct{}
 }
 
 var automationRegistry = struct {
@@ -149,7 +150,7 @@ func (v *UIView) AddAutomationChild(child Viewable) *UIView {
 		return v
 	}
 	cv := child.View()
-	if cv == nil {
+	if cv == nil || cv == v {
 		return v
 	}
 	for _, existing := range v.automation.children {
@@ -158,14 +159,57 @@ func (v *UIView) AddAutomationChild(child Viewable) *UIView {
 		}
 	}
 	v.automation.children = append(v.automation.children, cv)
+	if cv.automation.parents == nil {
+		cv.automation.parents = map[*UIView]struct{}{}
+	}
+	cv.automation.parents[v] = struct{}{}
+	return v
+}
+
+// RemoveAutomationChild removes one child from the semantic automation tree.
+func (v *UIView) RemoveAutomationChild(child Viewable) *UIView {
+	if v == nil || child == nil || child.View() == nil {
+		return v
+	}
+	cv := child.View()
+	children := v.automation.children[:0]
+	for _, existing := range v.automation.children {
+		if existing != cv {
+			children = append(children, existing)
+		}
+	}
+	v.automation.children = children
+	delete(cv.automation.parents, v)
 	return v
 }
 
 func (v *UIView) ClearAutomationChildren() *UIView {
-	if v != nil {
-		v.automation.children = nil
+	if v == nil {
+		return v
 	}
+	for _, child := range v.automation.children {
+		if child != nil {
+			delete(child.automation.parents, v)
+		}
+	}
+	v.automation.children = nil
 	return v
+}
+
+func (v *UIView) clearAutomationOnDelete() {
+	if v == nil {
+		return
+	}
+	for parent := range v.automation.parents {
+		parent.RemoveAutomationChild(v)
+	}
+	v.ClearAutomationChildren()
+	v.SetAutomationID("")
+	v.automation.click = nil
+	v.automation.setText = nil
+	v.automation.getText = nil
+	v.automation.getValue = nil
+	v.automation.props = nil
 }
 
 func AutomationLookup(id string) (*UIView, bool) {

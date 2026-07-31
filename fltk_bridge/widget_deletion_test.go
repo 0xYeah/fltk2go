@@ -19,6 +19,9 @@ func testWidgetDestroyed(name string, w Widget, t *testing.T) {
 	if ww.resizeHandlerId != 0 {
 		t.Errorf("%s's resizeHandlerId is not 0", name)
 	}
+	if ww.preResizeHandlerId != 0 {
+		t.Errorf("%s's preResizeHandlerId is not 0", name)
+	}
 }
 
 func testGlobalMapsEmpty(t *testing.T) {
@@ -73,6 +76,7 @@ func TestPanicWhenAccessingChildOfDeletedWidget(t *testing.T) {
 	win := NewWindow(400, 400)
 	g := NewGroup(1, 1, 398, 398)
 	g.SetResizeHandler(func() {})
+	g.SetPreResizeHandler(func() {})
 	b := NewButton(2, 2, 50, 50, "foo")
 	b.SetResizeHandler(func() {})
 	defer func() {
@@ -108,6 +112,7 @@ func TestPanicWhenAccessingChildOfWidgetDeletedViaParent(t *testing.T) {
 	win := NewWindow(400, 400)
 	g := NewGroup(1, 1, 398, 398)
 	g.SetResizeHandler(func() {})
+	g.SetPreResizeHandler(func() {})
 	b := NewButton(2, 2, 50, 50, "foo")
 	b.SetResizeHandler(func() {})
 	var bParent *Group

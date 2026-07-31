@@ -44,7 +44,11 @@ func BuildView(parent *view.UIView) view.Viewable {
 
 	hSplit.SetLeftView(leftPanel)
 	hSplit.SetRightView(rightPanel)
-	hSplit.SetLeftViewFixed(300)
+	hSplit.SetMinimumSizes(220, 320)
+	hSplit.SetDividerSize(8)
+	hSplit.SetDividerColors(0xCBD5E100, 0x94A3B800, 0x64748B00)
+	hSplit.SetPosition(0.35)
+	hSplit.SetAutomationID("example.workspace")
 	parent.AddSubview(hSplit)
 
 	vSplit := splitview.New(50, 600, 900, 80, splitview.Vertical)
@@ -59,6 +63,9 @@ func BuildView(parent *view.UIView) view.Viewable {
 
 	vSplit.SetLeftView(topPanel)
 	vSplit.SetRightView(bottomPanel)
+	vSplit.SetMinimumSizes(20, 20)
+	vSplit.SetDividerSize(6)
+	vSplit.SetPosition(0.5)
 	parent.AddSubview(vSplit)
 
 	topPanel.OnTouchUpInside(func() {

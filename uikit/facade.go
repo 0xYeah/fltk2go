@@ -49,6 +49,10 @@ type UISwitch = switchview.UISwitch
 type UIScrollView = scrollview.UIScrollView
 type UISplitView = splitview.SplitView
 type SplitOrientation = splitview.Orientation
+type SplitPositionPolicy = splitview.PositionPolicy
+type SplitPositionChange = splitview.PositionChange
+type SplitPositionChangeReason = splitview.PositionChangeReason
+type SplitGeometry = splitview.SplitGeometry
 type UIStackView = stackview.UIStackView
 type StackAxis = stackview.Axis
 type UITextView = textview.UITextView
@@ -68,8 +72,14 @@ const (
 	AxisVertical   = stackview.AxisVertical
 	AxisHorizontal = stackview.AxisHorizontal
 
-	SplitHorizontal = splitview.Horizontal
-	SplitVertical   = splitview.Vertical
+	SplitHorizontal           = splitview.Horizontal
+	SplitVertical             = splitview.Vertical
+	SplitPreserveRatio        = splitview.PreserveRatio
+	SplitPreserveLeadingSize  = splitview.PreserveLeadingSize
+	SplitPreserveTrailingSize = splitview.PreserveTrailingSize
+	SplitChangeProgrammatic   = splitview.ChangeProgrammatic
+	SplitChangeDrag           = splitview.ChangeDrag
+	SplitChangeResize         = splitview.ChangeResize
 )
 
 func NewUIWindow(width, height int, title string) *UIWindow {

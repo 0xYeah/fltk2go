@@ -18,10 +18,12 @@ type Viewable interface {
 // raw：底层 FLTK widget（Box/Button/Group/Window 都是 Widget）
 // host：父容器（Window 或 Group）
 type UIView struct {
-	raw           fltk_bridge.Widget
-	host          Container
-	eventHandlers map[fltk_bridge.Event]func(fltk_bridge.Event) bool
-	automation    automationState
+	raw                   fltk_bridge.Widget
+	host                  Container
+	eventHandlers         map[fltk_bridge.Event]func(fltk_bridge.Event) bool
+	automation            automationState
+	nextSuperviewObserver uint64
+	superviewObservers    map[uint64]func(Container, Container)
 }
 
 func (v *UIView) View() *UIView {
@@ -33,18 +35,58 @@ func (v *UIView) View() *UIView {
 
 // BindHost：框架内部使用，为 view 绑定父容器
 func (v *UIView) BindHost(host Container) {
-	if v == nil {
+	if v == nil || v.host == host {
 		return
 	}
+	previous := v.host
 	v.host = host
+	observers := make([]func(Container, Container), 0, len(v.superviewObservers))
+	for _, observer := range v.superviewObservers {
+		observers = append(observers, observer)
+	}
+	for _, observer := range observers {
+		observer(previous, host)
+	}
+}
+
+// ObserveSuperviewChanges observes logical UIKit ownership changes. The
+// returned function unregisters the observer.
+func (v *UIView) ObserveSuperviewChanges(observer func(Container, Container)) func() {
+	if v == nil || observer == nil {
+		return func() {}
+	}
+	v.nextSuperviewObserver++
+	id := v.nextSuperviewObserver
+	if v.superviewObservers == nil {
+		v.superviewObservers = map[uint64]func(Container, Container){}
+	}
+	v.superviewObservers[id] = observer
+	return func() {
+		if v != nil && v.superviewObservers != nil {
+			delete(v.superviewObservers, id)
+		}
+	}
 }
 
 // BindRaw：框架内部使用，为 view 绑定底层 widget
 func (v *UIView) BindRaw(raw fltk_bridge.Widget) {
-	if v == nil {
+	if v == nil || v.raw == raw {
 		return
 	}
 	v.raw = raw
+	if observable, ok := raw.(interface{ OnDelete(func()) }); ok {
+		boundRaw := raw
+		observable.OnDelete(func() {
+			if v.raw != boundRaw {
+				return
+			}
+			v.BindHost(nil)
+			v.clearAutomationOnDelete()
+			v.eventHandlers = nil
+			v.superviewObservers = nil
+			v.raw = nil
+		})
+	}
 	if v.eventHandlers != nil {
 		if eh, ok := v.raw.(interface {
 			SetEventHandler(func(fltk_bridge.Event) bool)
@@ -128,6 +170,7 @@ func (v *UIView) RemoveFromSuperview() {
 	if v == nil || v.host == nil || v.raw == nil {
 		return
 	}
-	v.host.Remove(v.raw)
-	v.host = nil
+	host := v.host
+	host.Remove(v.raw)
+	v.BindHost(nil)
 }

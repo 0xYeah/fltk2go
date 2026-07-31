@@ -11,12 +11,14 @@ import (
 )
 
 type widget struct {
-	tracker           *C.Fl_Widget_Tracker
-	callbackId        uintptr
-	deletionHandlerId uintptr
-	resizeHandlerId   uintptr
-	drawHandlerId     uintptr
-	eventHandlerId    int
+	tracker            *C.Fl_Widget_Tracker
+	callbackId         uintptr
+	deletionHandlerId  uintptr
+	resizeHandlerId    uintptr
+	preResizeHandlerId uintptr
+	drawHandlerId      uintptr
+	eventHandlerId     int
+	deleteObservers    []func()
 }
 
 type Widget interface {
@@ -82,7 +84,27 @@ func (w *widget) SetResizeHandler(handler func()) {
 	}
 	w.resizeHandlerId = globalCallbackMap.register(handler)
 	if C.go_fltk_Widget_set_resize_handler(w.ptr(), C.uintptr_t(w.resizeHandlerId)) == 0 {
-		panic("this widget does not support resize handling")
+		panic("widget doesn't support resize handlers")
+	}
+}
+
+// SetPreResizeHandler installs a callback that runs immediately before FLTK
+// applies automatic child translation/scaling for this widget.
+func (w *widget) SetPreResizeHandler(handler func()) {
+	if w.preResizeHandlerId > 0 {
+		globalCallbackMap.unregister(w.preResizeHandlerId)
+	}
+	w.preResizeHandlerId = globalCallbackMap.register(handler)
+	if C.go_fltk_Widget_set_pre_resize_handler(w.ptr(), C.uintptr_t(w.preResizeHandlerId)) == 0 {
+		panic("widget doesn't support pre-resize handlers")
+	}
+}
+
+// OnDelete registers an observer that runs once when the native FLTK widget
+// is destroyed. It is intended for framework lifecycle cleanup.
+func (w *widget) OnDelete(observer func()) {
+	if observer != nil {
+		w.deleteObservers = append(w.deleteObservers, observer)
 	}
 }
 
@@ -100,6 +122,11 @@ func (w *widget) SetDrawHandler(handler func(func())) {
 }
 
 func (w *widget) onDelete() {
+	observers := w.deleteObservers
+	w.deleteObservers = nil
+	for _, observer := range observers {
+		observer()
+	}
 	if w.deletionHandlerId > 0 {
 		globalCallbackMap.unregister(w.deletionHandlerId)
 	}
@@ -112,8 +139,12 @@ func (w *widget) onDelete() {
 		globalCallbackMap.unregister(w.resizeHandlerId)
 	}
 	w.resizeHandlerId = 0
+	if w.preResizeHandlerId > 0 {
+		globalCallbackMap.unregister(w.preResizeHandlerId)
+	}
+	w.preResizeHandlerId = 0
 	if w.drawHandlerId > 0 {
-		globalCallbackMap.unregister(w.drawHandlerId)
+		globalDrawHandlerMap.unregister(w.drawHandlerId)
 	}
 	w.drawHandlerId = 0
 	if w.eventHandlerId > 0 {
@@ -132,6 +163,10 @@ func (w *widget) Destroy() {
 		globalCallbackMap.unregister(w.resizeHandlerId)
 	}
 	w.resizeHandlerId = 0
+	if w.preResizeHandlerId > 0 {
+		globalCallbackMap.unregister(w.preResizeHandlerId)
+	}
+	w.preResizeHandlerId = 0
 	if w.drawHandlerId > 0 {
 		globalDrawHandlerMap.unregister(w.drawHandlerId)
 	}
@@ -206,6 +241,12 @@ func (w *widget) Parent() *Group {
 	initUnownedWidget(group, unsafe.Pointer(C.go_fltk_Widget_parent(w.ptr())))
 	return group
 }
+
+// SetWindowCursor updates the cursor of the containing FLTK window.
+func (w *widget) SetWindowCursor(cursor Cursor) bool {
+	return C.go_fltk_Widget_set_window_cursor(w.ptr(), C.int(cursor)) != 0
+}
+
 func (w *widget) TakeFocus() int {
 	return int(C.go_fltk_Widget_take_focus(w.ptr()))
 }

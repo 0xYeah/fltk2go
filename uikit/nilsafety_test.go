@@ -83,6 +83,20 @@ func TestFacadeNilReceiversAreSafe(t *testing.T) {
 	split.SetRightView(nil)
 	split.SetLeftViewFixed(10)
 	split.SetRightViewFixed(10)
+	split.SetPosition(0.5)
+	split.SetPositionPixels(100)
+	split.SetPositionPolicy(SplitPreserveRatio)
+	split.SetMinimumSizes(10, 10)
+	split.SetDividerSize(6)
+	split.SetDividerColors(0, 0, 0)
+	split.SetResizable(false)
+	split.OnPositionChanged(nil)
+	if split.Position() != 0 || split.PositionPixels() != 0 || split.Geometry() != (SplitGeometry{}) || split.Resizable() {
+		t.Fatal("nil UISplitView should return zero state")
+	}
+	if split.SetAutomationID("ignored") != nil || split.LeadingPane() != nil || split.TrailingPane() != nil || split.DividerView() != nil {
+		t.Fatal("nil UISplitView should return nil subviews")
+	}
 	if split.View() != nil || split.Raw() != nil {
 		t.Fatal("nil UISplitView should return nil view/raw")
 	}

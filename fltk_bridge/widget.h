@@ -10,6 +10,7 @@ extern "C" {
   typedef struct Fl_Widget_Tracker Fl_Widget_Tracker;
   typedef struct Fl_Widget Fl_Widget;
   typedef struct Fl_Group Fl_Group;
+
   typedef struct Fl_Image Fl_Image;
 
   extern Fl_Widget_Tracker* go_fltk_new_Widget_Tracker(Fl_Widget* t);
@@ -25,6 +26,7 @@ extern "C" {
   extern void go_fltk_Widget_clear_visible_focus(Fl_Widget *w);
   extern void go_fltk_Widget_set_callback(Fl_Widget *w, uintptr_t id);
   extern int go_fltk_Widget_set_resize_handler(Fl_Widget* w, uintptr_t id);
+  extern int go_fltk_Widget_set_pre_resize_handler(Fl_Widget* w, uintptr_t id);
   extern int go_fltk_Widget_set_draw_handler(Fl_Widget *w, uintptr_t id);
   extern void go_fltk_Widget_draw(Fl_Widget *w);
   // calls draw() on the widget ignoring potentially specified draw handlers.  
@@ -65,6 +67,7 @@ extern "C" {
   extern int go_fltk_Widget_labeltype(Fl_Widget *w);
   extern void go_fltk_Widget_set_tooltip(Fl_Widget* w, const char* tooltip);
   extern Fl_Group *go_fltk_Widget_parent(Fl_Widget *w);
+  extern int go_fltk_Widget_set_window_cursor(Fl_Widget *w, int cursor);
   extern int go_fltk_Widget_take_focus(Fl_Widget *w);
   extern int go_fltk_Widget_has_focus(Fl_Widget *w);
   extern unsigned int go_fltk_Widget_changed(Fl_Widget* w);
