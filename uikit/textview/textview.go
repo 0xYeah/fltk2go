@@ -1,15 +1,25 @@
 package textview
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/foundation"
 	"github.com/0xdevelop/fltk2go/uikit/view"
 )
 
 type UITextView struct {
-	v      view.UIView
-	raw    *fltk_bridge.TextEditor
-	buffer *fltk_bridge.TextBuffer
+	v             view.UIView
+	raw           *fltk_bridge.TextEditor
+	buffer        *fltk_bridge.TextBuffer
+	styleBuffer   *fltk_bridge.TextBuffer
+	font          fltk_bridge.Font
+	fontSize      int
+	textColor     fltk_bridge.Color
+	fallbackFont  fltk_bridge.Font
+	fallbackMatch func(rune) bool
+	fallbackWatch bool
 }
 
 type KeyEvent struct {
@@ -28,7 +38,10 @@ func NewUITextView(r *foundation.Rect) *UITextView {
 	raw.SetBuffer(buffer)
 	raw.SetWrapMode(fltk_bridge.WRAP_AT_BOUNDS)
 
-	t := &UITextView{raw: raw, buffer: buffer}
+	t := &UITextView{
+		raw: raw, buffer: buffer,
+		font: fltk_bridge.HELVETICA, fontSize: 14, textColor: fltk_bridge.FOREGROUND_COLOR,
+	}
 	t.v.BindRaw(raw)
 	t.v.SetAutomationRole("textbox").SetAutomationName("Text view")
 	t.v.SetAutomationTextHandlers(func(text string) error {
@@ -106,20 +119,76 @@ func (t *UITextView) SetWrapNone() {
 
 func (t *UITextView) SetFont(font fltk_bridge.Font) {
 	if t != nil && t.raw != nil {
+		t.font = font
 		t.raw.SetTextFont(font)
 	}
 }
 
 func (t *UITextView) SetFontSize(size int) {
 	if t != nil && t.raw != nil {
+		t.fontSize = size
 		t.raw.SetTextSize(size)
 	}
 }
 
 func (t *UITextView) SetTextColor(rgb uint) {
 	if t != nil && t.raw != nil {
+		t.textColor = fltk_bridge.Color(rgb)
 		t.raw.SetTextColor(fltk_bridge.Color(rgb))
 	}
+}
+
+// SetFallbackFont styles matching Unicode runes with a second FLTK font while
+// preserving the primary font for all other text. It is intended for native
+// font stacks where one platform font cannot cover every required script (for
+// example, a CJK font plus an emoji font). Configure the primary font, size and
+// color before calling this method.
+func (t *UITextView) SetFallbackFont(font fltk_bridge.Font, match func(rune) bool) {
+	if t == nil || t.raw == nil || t.buffer == nil || match == nil {
+		return
+	}
+	if t.styleBuffer == nil {
+		t.styleBuffer = fltk_bridge.NewTextBuffer()
+	}
+	t.fallbackFont = font
+	t.fallbackMatch = match
+	t.styleBuffer.SetText(buildFallbackStyles(t.Text(), match))
+	if !t.fallbackWatch {
+		t.fallbackWatch = true
+		t.buffer.AddModifyCallback(func(pos, inserted, deleted, _ int, _ string) {
+			if deleted > 0 {
+				t.styleBuffer.Remove(pos, pos+deleted)
+			}
+			if inserted > 0 {
+				text := t.buffer.GetTextRange(pos, pos+inserted)
+				t.styleBuffer.Insert(pos, buildFallbackStyles(text, t.fallbackMatch))
+			}
+		})
+	}
+	t.raw.SetHighlightData(t.styleBuffer, []fltk_bridge.StyleTableEntry{
+		{Color: t.textColor, Font: t.font, Size: t.fontSize},
+		{Color: t.textColor, Font: t.fallbackFont, Size: t.fontSize},
+	})
+}
+
+func buildFallbackStyles(text string, match func(rune) bool) string {
+	if match == nil {
+		return strings.Repeat("A", len(text))
+	}
+	var styles strings.Builder
+	styles.Grow(len(text))
+	for len(text) > 0 {
+		r, size := utf8.DecodeRuneInString(text)
+		style := byte('A')
+		if match(r) {
+			style = 'B'
+		}
+		for range size {
+			styles.WriteByte(style)
+		}
+		text = text[size:]
+	}
+	return styles.String()
 }
 
 func (t *UITextView) SetBackgroundColor(rgb uint) {

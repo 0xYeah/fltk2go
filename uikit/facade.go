@@ -52,6 +52,7 @@ type SplitOrientation = splitview.Orientation
 type UIStackView = stackview.UIStackView
 type StackAxis = stackview.Axis
 type UITextView = textview.UITextView
+type KeyEvent = textview.KeyEvent
 
 const (
 	SystemButton   = button.SystemButton
