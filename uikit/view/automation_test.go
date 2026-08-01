@@ -96,6 +96,17 @@ func TestAutomationIDLifecycleAndChildren(t *testing.T) {
 	}
 }
 
+func TestAutomationIDReplacementKeepsNewestOwnerRegistered(t *testing.T) {
+	oldView := (&UIView{}).SetAutomationID("rebuild.shared")
+	newView := (&UIView{}).SetAutomationID("rebuild.shared")
+	defer newView.SetAutomationID("")
+
+	oldView.SetAutomationID("")
+	if got, ok := AutomationLookup("rebuild.shared"); !ok || got != newView {
+		t.Fatalf("clearing replaced view removed newest owner: got=%p ok=%v want=%p", got, ok, newView)
+	}
+}
+
 func TestAutomationUnregistersWhenNativeWidgetIsDestroyed(t *testing.T) {
 	raw := fltk_bridge.NewGroup(0, 0, 100, 100)
 	raw.End()

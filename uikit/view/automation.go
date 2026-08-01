@@ -67,7 +67,7 @@ func (v *UIView) SetAutomationID(id string) *UIView {
 	}
 	automationRegistry.Lock()
 	defer automationRegistry.Unlock()
-	if v.automation.id != "" {
+	if v.automation.id != "" && automationRegistry.byID[v.automation.id] == v {
 		delete(automationRegistry.byID, v.automation.id)
 	}
 	v.automation.id = id
