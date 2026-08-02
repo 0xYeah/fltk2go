@@ -1,6 +1,8 @@
 package checkbox
 
 import (
+	"strconv"
+
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/foundation"
 	"github.com/0xdevelop/fltk2go/uikit/view"
@@ -47,13 +49,19 @@ func NewUICheckboxWithOptions(r *foundation.Rect, title string, style CheckboxSt
 	}
 
 	checkbox.v.BindRaw(cb)
+	checkbox.v.SetAutomationRole("checkbox")
+	checkbox.v.SetAutomationValueHandler(func() (string, bool) {
+		return strconv.FormatBool(checkbox.Value()), true
+	})
+	checkbox.v.OnAutomationClick(func() error {
+		checkbox.SetValue(!checkbox.Value())
+		checkbox.notifyValueChanged()
+		return nil
+	})
 	checkbox.ApplyStyle(style)
 
 	cb.SetCallback(func() {
-		val := cb.Value()
-		if checkbox.onValueChanged != nil {
-			checkbox.onValueChanged(val)
-		}
+		checkbox.notifyValueChanged()
 	})
 
 	return checkbox
@@ -86,4 +94,10 @@ func (c *UICheckbox) Value() bool {
 
 func (c *UICheckbox) OnValueChanged(cb func(bool)) {
 	c.onValueChanged = cb
+}
+
+func (c *UICheckbox) notifyValueChanged() {
+	if c != nil && c.onValueChanged != nil {
+		c.onValueChanged(c.Value())
+	}
 }

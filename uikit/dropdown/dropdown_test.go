@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/0xdevelop/fltk2go/foundation"
+	"github.com/0xdevelop/fltk2go/uikit/view"
 )
 
 func TestMenuItemSelectionNotifiesDropdownHandler(t *testing.T) {
@@ -25,5 +26,25 @@ func TestMenuItemSelectionNotifiesDropdownHandler(t *testing.T) {
 	}
 	if dd.SelectedIndex() != 1 || dd.SelectedOption() != "简体中文" {
 		t.Fatalf("selected state = index:%d option:%q", dd.SelectedIndex(), dd.SelectedOption())
+	}
+}
+
+func TestDropdownExposesSemanticAutomationSelection(t *testing.T) {
+	dd := NewUIDropdown(&foundation.Rect{Width: 120, Height: 30})
+	dd.SetOptions([]string{"English", "简体中文"})
+	dd.View().SetAutomationID("test.dropdown")
+	defer dd.View().SetAutomationID("")
+
+	called := 0
+	dd.OnSelectionChanged(func(index int, option string) { called++ })
+	if err := view.AutomationSetText("test.dropdown", "简体中文"); err != nil {
+		t.Fatalf("semantic selection failed: %v", err)
+	}
+	if dd.SelectedIndex() != 1 || dd.SelectedOption() != "简体中文" || called != 1 {
+		t.Fatalf("semantic selection state = index:%d option:%q callbacks:%d", dd.SelectedIndex(), dd.SelectedOption(), called)
+	}
+	node := dd.View().AutomationSnapshot()
+	if node.Role != "combobox" || node.Value != "简体中文" {
+		t.Fatalf("automation snapshot = %#v", node)
 	}
 }

@@ -1,6 +1,8 @@
 package dropdown
 
 import (
+	"fmt"
+
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/foundation"
 	"github.com/0xdevelop/fltk2go/uikit/view"
@@ -24,6 +26,17 @@ func NewUIDropdown(r *foundation.Rect) *UIDropdown {
 		raw: choice,
 	}
 	dd.v.BindRaw(choice)
+	dd.v.SetAutomationRole("combobox")
+	dd.v.SetAutomationTextHandlers(func(option string) error {
+		for index, candidate := range dd.options {
+			if candidate == option {
+				dd.selectOption(index)
+				return nil
+			}
+		}
+		return fmt.Errorf("dropdown option %q not found", option)
+	}, nil)
+	dd.v.SetAutomationValueHandler(func() (string, bool) { return dd.SelectedOption(), true })
 
 	return dd
 }
