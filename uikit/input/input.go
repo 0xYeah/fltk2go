@@ -55,10 +55,20 @@ func NewWithType(x, y, width, height int, placeholder string, inputType InputTyp
 	// 绑定底层widget到view
 	in.v.BindRaw(input)
 	in.v.SetAutomationRole("textbox").SetAutomationName(placeholder)
+	secure := inputType == SecretInput
+	if secure {
+		in.v.SetAutomationProperty("secure", "true")
+	}
 	in.v.SetAutomationTextHandlers(func(text string) error {
 		in.SetText(text)
 		return nil
 	}, func() (string, bool) {
+		// Automation may write credentials for an end-to-end login test, but
+		// snapshots must never serialize them. Callers that own the widget can
+		// still read Text() explicitly on the GUI thread.
+		if secure {
+			return "", false
+		}
 		return in.Text(), true
 	})
 
