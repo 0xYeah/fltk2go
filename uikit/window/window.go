@@ -8,8 +8,10 @@ import (
 )
 
 type UIWindow struct {
-	raw  *fltk_bridge.Window
-	root *view.UIView
+	raw     *fltk_bridge.Window
+	root    *view.UIView
+	closed  bool
+	onClose func()
 }
 
 func NewUIWindow(width, height int, title string) *UIWindow {
@@ -39,6 +41,10 @@ func NewWindowWithRect(rect *foundation.Rect, title string) *UIWindow {
 		raw:  win,
 		root: &view.UIView{},
 	}
+	// Route the native window-manager close action through the same lifecycle
+	// used by application buttons. This gives owners one deterministic callback
+	// and guarantees that native widget/automation registrations are released.
+	win.SetCallback(func() { u.Close() })
 
 	// root view 不一定需要 raw（它是“逻辑根”），但必须有 host（window）
 	u.root.BindHost(win)
@@ -77,3 +83,35 @@ func (w *UIWindow) Raw() *fltk_bridge.Window {
 	}
 	return w.raw
 }
+
+// OnClose registers a lifecycle callback invoked exactly once when Close is
+// first requested, including requests originating from the window manager.
+func (w *UIWindow) OnClose(callback func()) {
+	if w == nil || w.closed {
+		return
+	}
+	w.onClose = callback
+}
+
+// Close hides and destroys the native window. It is safe to call repeatedly.
+// The window must be recreated after Close; Raw returns nil once closed.
+func (w *UIWindow) Close() {
+	if w == nil || w.closed {
+		return
+	}
+	w.closed = true
+	raw := w.raw
+	w.raw = nil
+	callback := w.onClose
+	w.onClose = nil
+	if raw != nil {
+		raw.Hide()
+		raw.Destroy()
+	}
+	if callback != nil {
+		callback()
+	}
+}
+
+// IsClosed reports whether the managed close lifecycle has completed.
+func (w *UIWindow) IsClosed() bool { return w == nil || w.closed }
