@@ -2,6 +2,7 @@ package tableview
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/uikit/textlayout"
@@ -22,6 +23,7 @@ type TableView struct {
 
 	dataSource DataSource
 	delegate   Delegate
+	onActivate func(row int)
 
 	columns []TableColumn
 
@@ -58,6 +60,12 @@ func newWithBridgeTable(bt BridgeTable) *TableView {
 		bt.SetDrawCellHandler(tv.onDrawCell)
 		bt.SetEventHandler(tv.onEvent)
 	}
+	tv.v.SetAutomationRole("table").SetAutomationValueHandler(func() (string, bool) {
+		return strconv.Itoa(tv.GetSelectedRow()), true
+	})
+	tv.v.On(fltk_bridge.KEYDOWN, func(fltk_bridge.Event) bool {
+		return tv.handleKey(fltk_bridge.EventKey())
+	})
 
 	return tv
 }
@@ -144,6 +152,79 @@ func (tv *TableView) GetSelectedRow() int {
 		return -1
 	}
 	return tv.table.GetSelectedRow()
+}
+
+// SelectRow selects, reveals, and publishes a data row through the delegate.
+// It returns false when the row is outside the current data source.
+func (tv *TableView) SelectRow(row int) bool {
+	if tv == nil || tv.table == nil || tv.dataSource == nil || row < 0 || row >= tv.dataSource.NumberOfRows(tv) {
+		return false
+	}
+	tv.table.SelectRow(row)
+	tv.table.ScrollToRow(row)
+	if tv.delegate != nil {
+		tv.delegate.DidSelectRow(tv, row)
+	}
+	tv.table.Redraw()
+	return true
+}
+
+// OnActivate registers the primary row action used by native double-click,
+// Enter, and semantic debug automation.
+func (tv *TableView) OnActivate(handler func(row int)) {
+	if tv == nil {
+		return
+	}
+	tv.onActivate = handler
+	if handler == nil {
+		tv.v.OnAutomationClick(nil)
+		return
+	}
+	tv.v.OnAutomationClick(func() error {
+		tv.ActivateSelected()
+		return nil
+	})
+}
+
+// ActivateSelected invokes the primary action for the selected row.
+func (tv *TableView) ActivateSelected() bool {
+	if tv == nil || tv.onActivate == nil {
+		return false
+	}
+	row := tv.GetSelectedRow()
+	if row < 0 {
+		return false
+	}
+	tv.onActivate(row)
+	return true
+}
+
+func (tv *TableView) handleKey(key int) bool {
+	if tv == nil || tv.dataSource == nil {
+		return false
+	}
+	rows := tv.dataSource.NumberOfRows(tv)
+	if rows <= 0 {
+		return false
+	}
+	selected := tv.GetSelectedRow()
+	switch key {
+	case fltk_bridge.ENTER_KEY:
+		return tv.ActivateSelected()
+	case fltk_bridge.UP:
+		if selected < 0 {
+			selected = rows
+		}
+		return tv.SelectRow(max(0, selected-1))
+	case fltk_bridge.DOWN:
+		return tv.SelectRow(min(rows-1, selected+1))
+	case fltk_bridge.HOME:
+		return tv.SelectRow(0)
+	case fltk_bridge.END:
+		return tv.SelectRow(rows - 1)
+	default:
+		return false
+	}
 }
 
 func (tv *TableView) Dequeue(reuseID string) *TableViewCell {
@@ -285,13 +366,15 @@ func (tv *TableView) cellFor(row, col int) *TableViewCell {
 	return cell
 }
 
-func (tv *TableView) onEvent(row int) bool {
-	if tv == nil {
+func (tv *TableView) onEvent(interaction TableInteraction) bool {
+	if tv == nil || interaction.Row < 0 {
 		return false
 	}
-	if tv.delegate != nil && row >= 0 {
-		tv.delegate.DidSelectRow(tv, row)
-		return true
+	if tv.delegate != nil {
+		tv.delegate.DidSelectRow(tv, interaction.Row)
 	}
-	return false
+	if interaction.Clicks > 0 && tv.onActivate != nil {
+		tv.onActivate(interaction.Row)
+	}
+	return tv.delegate != nil || tv.onActivate != nil
 }

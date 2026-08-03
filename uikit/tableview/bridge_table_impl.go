@@ -8,7 +8,7 @@ import (
 type bridgeTableImpl struct {
 	table           *fltk_bridge.TableRow
 	drawCellHandler func(ctx fltk_bridge.TableContext, row, col int, x, y, w, h int)
-	eventHandler    func(row int) bool
+	eventHandler    func(TableInteraction) bool
 }
 
 // newBridgeTableImpl 创建一个新的 bridgeTableImpl 实例
@@ -40,7 +40,7 @@ func newBridgeTableImpl(x, y, w, h int) *bridgeTableImpl {
 	table.SetCallback(func() {
 		if bt.eventHandler != nil {
 			row := table.CallbackRow()
-			bt.eventHandler(row)
+			bt.eventHandler(TableInteraction{Row: row, Clicks: fltk_bridge.EventClicks()})
 		}
 	})
 
@@ -89,7 +89,7 @@ func (bt *bridgeTableImpl) SetBackgroundColor(color fltk_bridge.Color) {
 }
 
 // SetEventHandler 设置处理事件的回调函数
-func (bt *bridgeTableImpl) SetEventHandler(fn func(row int) bool) {
+func (bt *bridgeTableImpl) SetEventHandler(fn func(TableInteraction) bool) {
 	bt.eventHandler = fn
 }
 
