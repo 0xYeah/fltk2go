@@ -43,6 +43,14 @@ func TestSetBackgroundColorForwardsToBridge(t *testing.T) {
 	}
 }
 
+func TestNativeSelectionGeometryUsesZeroBasedDataIndex(t *testing.T) {
+	for raw, want := range map[int]int{-1: -1, 0: 0, 2: 2} {
+		if got := normalizeSelectedRow(raw); got != want {
+			t.Fatalf("normalizeSelectedRow(%d) = %d, want %d", raw, got, want)
+		}
+	}
+}
+
 type sliceDataSource struct {
 	rows  int
 	cells map[int]*TableViewCell

@@ -21,9 +21,10 @@ type TableView struct {
 	v          view.UIView
 	customDraw func(ctx fltk_bridge.TableContext, row, col, x, y, w, h int)
 
-	dataSource DataSource
-	delegate   Delegate
-	onActivate func(row int)
+	dataSource  DataSource
+	delegate    Delegate
+	onActivate  func(row int)
+	selectedRow int
 
 	columns []TableColumn
 
@@ -46,6 +47,7 @@ func New(x, y, w, h int) (*TableView, error) {
 func newWithBridgeTable(bt BridgeTable) *TableView {
 	tv := &TableView{
 		table:            bt,
+		selectedRow:      -1,
 		defaultRowHeight: 24,
 		headerHeight:     24,
 		reusePool:        map[string][]*TableViewCell{},
@@ -151,6 +153,9 @@ func (tv *TableView) GetSelectedRow() int {
 	if tv == nil || tv.table == nil {
 		return -1
 	}
+	if tv.selectedRow >= 0 {
+		return tv.selectedRow
+	}
 	return tv.table.GetSelectedRow()
 }
 
@@ -162,6 +167,7 @@ func (tv *TableView) SelectRow(row int) bool {
 	}
 	tv.table.SelectRow(row)
 	tv.table.ScrollToRow(row)
+	tv.selectedRow = row
 	if tv.delegate != nil {
 		tv.delegate.DidSelectRow(tv, row)
 	}
@@ -267,6 +273,9 @@ func (tv *TableView) ReloadData() {
 	if rows < 0 {
 		rows = 0
 	}
+	if tv.selectedRow >= rows {
+		tv.selectedRow = -1
+	}
 	tv.table.SetRows(rows)
 	tv.table.Redraw()
 }
@@ -370,6 +379,7 @@ func (tv *TableView) onEvent(interaction TableInteraction) bool {
 	if tv == nil || interaction.Row < 0 {
 		return false
 	}
+	tv.selectedRow = interaction.Row
 	if tv.delegate != nil {
 		tv.delegate.DidSelectRow(tv, interaction.Row)
 	}

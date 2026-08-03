@@ -125,17 +125,22 @@ func (bt *bridgeTableImpl) DeleteRow(row int) {
 	}
 }
 
-// SelectRow 选中指定行
+// SelectRow selects a zero-based data row.
 func (bt *bridgeTableImpl) SelectRow(row int) {
-	// 选中指定行的逻辑
 	bt.table.SelectRow(row, fltk_bridge.Select)
 }
 
-// GetSelectedRow 获取当前选中的行（0-based 数据行索引，无选中返回 -1）
+// GetSelectedRow returns the selected zero-based data row, or -1 when empty.
+// Column headers are a separate drawing context and do not offset FLTK row
+// selection geometry.
 func (bt *bridgeTableImpl) GetSelectedRow() int {
 	top, _, _, _ := bt.table.Selection()
-	if top <= 0 { // -1 = no selection, 0 = column header row
+	return normalizeSelectedRow(top)
+}
+
+func normalizeSelectedRow(top int) int {
+	if top < 0 {
 		return -1
 	}
-	return top - 1 // convert from FLTK 1-based data row to 0-based
+	return top
 }
