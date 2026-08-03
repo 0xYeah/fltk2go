@@ -12,6 +12,8 @@ type Input struct {
 
 	// 基础视图
 	v view.UIView
+
+	onChange func()
 }
 
 // InputType 输入框类型
@@ -61,6 +63,9 @@ func NewWithType(x, y, width, height int, placeholder string, inputType InputTyp
 	}
 	in.v.SetAutomationTextHandlers(func(text string) error {
 		in.SetText(text)
+		if in.onChange != nil {
+			in.onChange()
+		}
 		return nil
 	}, func() (string, bool) {
 		// Automation may write credentials for an end-to-end login test, but
@@ -177,6 +182,7 @@ func (in *Input) IsEnabled() bool {
 // OnChange 设置文本变化回调
 func (in *Input) OnChange(callback func()) {
 	if in != nil && in.raw != nil {
+		in.onChange = callback
 		if widget, ok := in.raw.(interface{ SetCallback(f func()) }); ok {
 			widget.SetCallback(callback)
 		}

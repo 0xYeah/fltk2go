@@ -1,6 +1,10 @@
 package input
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/0xdevelop/fltk2go/uikit/view"
+)
 
 func TestSecretInputAutomationSnapshotDoesNotExposeText(t *testing.T) {
 	in := NewWithType(0, 0, 120, 24, "Password", SecretInput)
@@ -26,5 +30,20 @@ func TestTextInputAutomationSnapshotRetainsText(t *testing.T) {
 
 	if got := in.View().AutomationSnapshot().Text; got != "visible-value" {
 		t.Fatalf("snapshot text = %q, want visible-value", got)
+	}
+}
+
+func TestAutomationSetTextPublishesNativeChangeCallback(t *testing.T) {
+	in := New(0, 0, 120, 24, "Search")
+	in.View().SetAutomationID("test.search")
+	defer in.View().SetAutomationID("")
+	changes := 0
+	in.OnChange(func() { changes++ })
+
+	if err := view.AutomationSetText("test.search", "日本語 SSH"); err != nil {
+		t.Fatalf("AutomationSetText failed: %v", err)
+	}
+	if in.Text() != "日本語 SSH" || changes != 1 {
+		t.Fatalf("text/change count = %q/%d, want 日本語 SSH/1", in.Text(), changes)
 	}
 }
