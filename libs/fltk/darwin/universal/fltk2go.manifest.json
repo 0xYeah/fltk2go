@@ -1,14 +1,14 @@
 {
   "module": "github.com/0xdevelop/fltk2go",
-  "fltk_version": "release-1.4.4",
+  "fltk_version": "release-1.4.5",
   "target": {
     "goos": "darwin",
     "out_arch": "universal"
   },
   "build": {
     "toolchain": "cmake+clang",
-    "date": "2026-06-15T13:15:19Z",
-    "git_rev": "9c70ea95a176933ffd575022d145c284d1fc9ef7"
+    "date": "2026-08-04T18:20:47Z",
+    "git_rev": "a9b1113516ffd15fc7602a6d425a317df30f4720"
   },
   "artifacts": {
     "libs": [
