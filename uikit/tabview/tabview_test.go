@@ -74,4 +74,66 @@ func TestUITabView_SelectTab(t *testing.T) {
 	if !called {
 		t.Fatal("Expected OnTabChanged callback to be triggered for index 1")
 	}
+	if tv.ActiveIndex() != 1 || tv.Count() != 2 {
+		t.Fatalf("unexpected tab state: active=%d count=%d", tv.ActiveIndex(), tv.Count())
+	}
+}
+
+func TestUITabViewStableIDsAndDynamicRemoval(t *testing.T) {
+	tv := tabview.NewUITabView(nil)
+	tv.SetAutomationID("sessions")
+	tv.AddTabWithID("local", "Local", newMockViewable())
+	tv.AddTabWithID("server", "Server", newMockViewable())
+	tv.AddTabWithID("logs", "Logs", newMockViewable())
+
+	if got := tv.IndexOfID("server"); got != 1 {
+		t.Fatalf("IndexOfID(server) = %d, want 1", got)
+	}
+	if _, ok := view.AutomationLookup("sessions.tab.server"); !ok {
+		t.Fatal("stable semantic tab id was not registered")
+	}
+
+	tv.SelectTab(1)
+	if !tv.RemoveTab(0) {
+		t.Fatal("RemoveTab(0) failed")
+	}
+	if tv.ActiveIndex() != 0 || tv.TabID(0) != "server" {
+		t.Fatalf("active tab identity changed after removing preceding tab: active=%d id=%q", tv.ActiveIndex(), tv.TabID(0))
+	}
+	if _, ok := view.AutomationLookup("sessions.tab.local"); ok {
+		t.Fatal("removed tab remained in automation registry")
+	}
+
+	if !tv.SetTabTitle(0, "Server · 运行中") {
+		t.Fatal("SetTabTitle failed")
+	}
+	if node, ok := view.AutomationLookup("sessions.tab.server"); !ok || node.AutomationName() != "Server · 运行中" {
+		t.Fatal("updated title was not published semantically")
+	}
+}
+
+func TestUITabViewRemovalSelectsNearestTabAndNotifies(t *testing.T) {
+	tv := tabview.NewUITabView(nil)
+	tv.AddTabWithID("one", "One", nil)
+	tv.AddTabWithID("two", "Two", nil)
+	tv.AddTabWithID("three", "Three", nil)
+	tv.SelectTab(2)
+
+	var changed []int
+	tv.OnTabChanged(func(index int) { changed = append(changed, index) })
+	if !tv.RemoveTab(2) {
+		t.Fatal("RemoveTab(active) failed")
+	}
+	if tv.ActiveIndex() != 1 || tv.TabID(1) != "two" {
+		t.Fatalf("expected nearest remaining tab, active=%d id=%q", tv.ActiveIndex(), tv.TabID(tv.ActiveIndex()))
+	}
+	if len(changed) != 1 || changed[0] != 1 {
+		t.Fatalf("unexpected selection callbacks: %#v", changed)
+	}
+
+	tv.RemoveTab(1)
+	tv.RemoveTab(0)
+	if tv.ActiveIndex() != -1 || tv.Count() != 0 {
+		t.Fatalf("empty tab view state is invalid: active=%d count=%d", tv.ActiveIndex(), tv.Count())
+	}
 }
