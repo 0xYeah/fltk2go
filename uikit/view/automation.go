@@ -16,6 +16,8 @@ var (
 	ErrAutomationNodeNotFound = errors.New("automation node not found")
 	// ErrAutomationActionUnsupported is returned when the target view does not expose the requested action.
 	ErrAutomationActionUnsupported = errors.New("automation action unsupported")
+	// ErrAutomationNodeUnavailable is returned when a hidden or disabled node is targeted.
+	ErrAutomationNodeUnavailable = errors.New("automation node is hidden or disabled")
 )
 
 type automationState struct {
@@ -240,6 +242,9 @@ func AutomationClick(id string) error {
 	if !ok || v == nil {
 		return ErrAutomationNodeNotFound
 	}
+	if !v.automationEffectiveVisible(nil) || !v.automationEffectiveEnabled(nil) {
+		return ErrAutomationNodeUnavailable
+	}
 	if v.automation.click == nil {
 		return ErrAutomationActionUnsupported
 	}
@@ -253,6 +258,9 @@ func AutomationSetText(id, text string) error {
 	v, ok := AutomationLookup(id)
 	if !ok || v == nil {
 		return ErrAutomationNodeNotFound
+	}
+	if !v.automationEffectiveVisible(nil) || !v.automationEffectiveEnabled(nil) {
+		return ErrAutomationNodeUnavailable
 	}
 	if v.automation.setText == nil {
 		return ErrAutomationActionUnsupported
@@ -302,9 +310,9 @@ func (v *UIView) AutomationSnapshot() AutomationNode {
 	if v.raw != nil {
 		node.Bounds = AutomationBounds{X: widgetX(v.raw), Y: widgetY(v.raw), Width: widgetW(v.raw), Height: widgetH(v.raw)}
 		node.Label = widgetLabel(v.raw)
-		node.Enabled = widgetActive(v.raw)
-		node.Visible = widgetVisible(v.raw)
 	}
+	node.Enabled = v.automationEffectiveEnabled(nil)
+	node.Visible = v.automationEffectiveVisible(nil)
 	if v.automation.click != nil {
 		node.Actions = append(node.Actions, "click")
 	}
@@ -328,6 +336,58 @@ func (v *UIView) AutomationSnapshot() AutomationNode {
 		}
 	}
 	return node
+}
+
+func (v *UIView) automationEffectiveVisible(visiting map[*UIView]bool) bool {
+	if v == nil {
+		return false
+	}
+	if v.raw != nil && !widgetVisible(v.raw) {
+		return false
+	}
+	if len(v.automation.parents) == 0 {
+		return true
+	}
+	if visiting == nil {
+		visiting = make(map[*UIView]bool)
+	}
+	if visiting[v] {
+		return false
+	}
+	visiting[v] = true
+	defer delete(visiting, v)
+	for parent := range v.automation.parents {
+		if parent != nil && parent.automationEffectiveVisible(visiting) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *UIView) automationEffectiveEnabled(visiting map[*UIView]bool) bool {
+	if v == nil {
+		return false
+	}
+	if v.raw != nil && !widgetActive(v.raw) {
+		return false
+	}
+	if len(v.automation.parents) == 0 {
+		return true
+	}
+	if visiting == nil {
+		visiting = make(map[*UIView]bool)
+	}
+	if visiting[v] {
+		return false
+	}
+	visiting[v] = true
+	defer delete(visiting, v)
+	for parent := range v.automation.parents {
+		if parent != nil && parent.automationEffectiveEnabled(visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 func widgetX(w fltk_bridge.Widget) int {

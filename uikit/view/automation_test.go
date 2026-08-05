@@ -1,6 +1,7 @@
 package view
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
@@ -167,5 +168,47 @@ func TestAutomationValueHandlerAndUnregisterPrefix(t *testing.T) {
 	}
 	if _, ok := AutomationLookup("other.three"); !ok {
 		t.Fatal("other.three should remain registered")
+	}
+}
+
+func TestAutomationUsesEffectiveAncestorVisibilityAndEnabledState(t *testing.T) {
+	parentRaw := fltk_bridge.NewGroup(0, 0, 100, 100)
+	childRaw := fltk_bridge.NewButton(0, 0, 50, 20, "Child")
+	parentRaw.End()
+	parent := &UIView{}
+	parent.BindRaw(parentRaw)
+	child := &UIView{}
+	child.BindRaw(childRaw)
+	child.SetAutomationID("effective.child").OnAutomationClick(func() error { return nil })
+	parent.AddAutomationChild(child)
+	defer func() {
+		child.SetAutomationID("")
+		childRaw.Destroy()
+		parentRaw.Destroy()
+	}()
+
+	parentRaw.Hide()
+	if node := child.AutomationSnapshot(); node.Visible {
+		t.Fatalf("child of hidden parent reported visible: %#v", node)
+	}
+	if err := AutomationClick("effective.child"); !errors.Is(err, ErrAutomationNodeUnavailable) {
+		t.Fatalf("click hidden child error = %v", err)
+	}
+
+	parentRaw.Show()
+	parentRaw.Deactivate()
+	if node := child.AutomationSnapshot(); node.Enabled {
+		t.Fatalf("child of disabled parent reported enabled: %#v", node)
+	}
+	if err := AutomationClick("effective.child"); !errors.Is(err, ErrAutomationNodeUnavailable) {
+		t.Fatalf("click disabled child error = %v", err)
+	}
+
+	parentRaw.Activate()
+	if node := child.AutomationSnapshot(); !node.Visible || !node.Enabled {
+		t.Fatalf("child of available parent = %#v", node)
+	}
+	if err := AutomationClick("effective.child"); err != nil {
+		t.Fatalf("click available child: %v", err)
 	}
 }
