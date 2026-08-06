@@ -12,6 +12,12 @@ class GTerminal : public EventHandler<Fl_Terminal> {
 public:
   GTerminal(int x, int y, int w, int h, const char *label)
       : EventHandler<Fl_Terminal>(x, y, w, h, label) {}
+
+  int fit_display_columns() {
+    const int columns = w_to_col(w());
+    if (columns > 0 && columns != display_columns()) display_columns(columns);
+    return display_columns();
+  }
 };
 
 GTerminal *go_fltk_new_Terminal(int x, int y, int w, int h, const char *label) {
@@ -66,6 +72,14 @@ int go_fltk_Terminal_display_rows(Fl_Terminal *terminal) {
 
 int go_fltk_Terminal_display_columns(Fl_Terminal *terminal) {
   return terminal ? terminal->display_columns() : 0;
+}
+
+int go_fltk_Terminal_fit_display_columns(GTerminal *terminal) {
+  return terminal ? terminal->fit_display_columns() : 0;
+}
+
+void go_fltk_Terminal_set_horizontal_scrollbar(Fl_Terminal *terminal, int style) {
+  if (terminal) terminal->hscrollbar_style(static_cast<Fl_Terminal::ScrollbarStyle>(style));
 }
 
 void go_fltk_Terminal_set_text_font(Fl_Terminal *terminal, int font) {

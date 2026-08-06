@@ -43,3 +43,17 @@ func TestTerminalResetAndClear(t *testing.T) {
 		t.Fatalf("invalid terminal grid after reset: %dx%d", terminal.DisplayColumns(), terminal.DisplayRows())
 	}
 }
+
+func TestTerminalFitsColumnsAfterNativeResize(t *testing.T) {
+	terminal := NewTerminal(0, 0, 900, 500)
+	defer terminal.Destroy()
+	before := terminal.DisplayColumns()
+	terminal.Resize(0, 0, 400, 300)
+	after := terminal.FitDisplayColumns()
+	if before <= 0 || after <= 0 || after >= before {
+		t.Fatalf("terminal columns did not fit resized width: before=%d after=%d", before, after)
+	}
+	if got := terminal.DisplayColumns(); got != after {
+		t.Fatalf("terminal display columns = %d, want fitted %d", got, after)
+	}
+}

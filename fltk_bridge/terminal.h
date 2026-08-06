@@ -21,6 +21,8 @@ void go_fltk_Terminal_set_history_rows(Fl_Terminal *terminal, int rows);
 int go_fltk_Terminal_history_rows(Fl_Terminal *terminal);
 int go_fltk_Terminal_display_rows(Fl_Terminal *terminal);
 int go_fltk_Terminal_display_columns(Fl_Terminal *terminal);
+int go_fltk_Terminal_fit_display_columns(GTerminal *terminal);
+void go_fltk_Terminal_set_horizontal_scrollbar(Fl_Terminal *terminal, int style);
 void go_fltk_Terminal_set_text_font(Fl_Terminal *terminal, int font);
 void go_fltk_Terminal_set_text_size(Fl_Terminal *terminal, int size);
 void go_fltk_Terminal_set_text_color(Fl_Terminal *terminal, unsigned int color);

@@ -73,6 +73,22 @@ func (t *Terminal) DisplayRows() int {
 func (t *Terminal) DisplayColumns() int {
 	return int(C.go_fltk_Terminal_display_columns(t.ptrTerminal()))
 }
+func (t *Terminal) FitDisplayColumns() int {
+	return int(C.go_fltk_Terminal_fit_display_columns((*C.GTerminal)(unsafe.Pointer(t.ptr()))))
+}
+
+// TerminalScrollbarStyle controls the native terminal's horizontal scrollbar.
+type TerminalScrollbarStyle int
+
+const (
+	TerminalScrollbarOff TerminalScrollbarStyle = iota
+	TerminalScrollbarAuto
+	TerminalScrollbarOn
+)
+
+func (t *Terminal) SetHorizontalScrollbar(style TerminalScrollbarStyle) {
+	C.go_fltk_Terminal_set_horizontal_scrollbar(t.ptrTerminal(), C.int(style))
+}
 func (t *Terminal) SetTextFont(font Font) {
 	C.go_fltk_Terminal_set_text_font(t.ptrTerminal(), C.int(font))
 }

@@ -43,6 +43,7 @@ func NewUITerminalView(r *foundation.Rect) *UITerminalView {
 	// implicit construction group immediately so subsequently created application
 	// widgets cannot become accidental terminal children.
 	raw.End()
+	raw.SetHorizontalScrollbar(fltk_bridge.TerminalScrollbarOff)
 	t := &UITerminalView{raw: raw}
 	t.v.BindRaw(raw)
 	t.v.SetAutomationRole("terminal").SetAutomationName("Terminal")
@@ -51,7 +52,10 @@ func NewUITerminalView(r *foundation.Rect) *UITerminalView {
 		raw.TakeFocus()
 		return false // preserve Fl_Terminal mouse selection handling
 	})
-	raw.SetResizeHandler(t.publishSize)
+	raw.SetResizeHandler(func() {
+		raw.FitDisplayColumns()
+		t.publishSize()
+	})
 	return t
 }
 
