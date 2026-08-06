@@ -16,6 +16,7 @@ import (
 	switchview "github.com/0xdevelop/fltk2go/uikit/switch"
 	"github.com/0xdevelop/fltk2go/uikit/tableview"
 	"github.com/0xdevelop/fltk2go/uikit/tabview"
+	"github.com/0xdevelop/fltk2go/uikit/terminalview"
 	"github.com/0xdevelop/fltk2go/uikit/textfield"
 	"github.com/0xdevelop/fltk2go/uikit/textview"
 	"github.com/0xdevelop/fltk2go/uikit/treeview"
@@ -57,6 +58,8 @@ type UIStackView = stackview.UIStackView
 type StackAxis = stackview.Axis
 type UITextView = textview.UITextView
 type KeyEvent = textview.KeyEvent
+type UITerminalView = terminalview.UITerminalView
+type TerminalSize = terminalview.Size
 
 const (
 	SystemButton   = button.SystemButton
@@ -168,6 +171,10 @@ func NewUIStackView(r *foundation.Rect, axis StackAxis) *UIStackView {
 
 func NewUITextView(r *foundation.Rect) *UITextView {
 	return textview.NewUITextView(r)
+}
+
+func NewUITerminalView(r *foundation.Rect) *UITerminalView {
+	return terminalview.NewUITerminalView(r)
 }
 
 func Message(title, message string) {
