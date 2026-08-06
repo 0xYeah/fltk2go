@@ -36,12 +36,17 @@ func TestDropdownExposesSemanticAutomationSelection(t *testing.T) {
 	defer dd.View().SetAutomationID("")
 
 	called := 0
+	redrawn := 0
+	dd.redrawSelection = func() { redrawn++ }
 	dd.OnSelectionChanged(func(index int, option string) { called++ })
 	if err := view.AutomationSetText("test.dropdown", "简体中文"); err != nil {
 		t.Fatalf("semantic selection failed: %v", err)
 	}
 	if dd.SelectedIndex() != 1 || dd.SelectedOption() != "简体中文" || called != 1 {
 		t.Fatalf("semantic selection state = index:%d option:%q callbacks:%d", dd.SelectedIndex(), dd.SelectedOption(), called)
+	}
+	if redrawn != 1 {
+		t.Fatalf("semantic selection redraws = %d, want 1", redrawn)
 	}
 	node := dd.View().AutomationSnapshot()
 	if node.Role != "combobox" || node.Value != "简体中文" {

@@ -13,6 +13,7 @@ type UIDropdown struct {
 	raw                *fltk_bridge.Choice
 	options            []string
 	onSelectionChanged func(index int, option string)
+	redrawSelection    func()
 }
 
 func NewUIDropdown(r *foundation.Rect) *UIDropdown {
@@ -23,7 +24,8 @@ func NewUIDropdown(r *foundation.Rect) *UIDropdown {
 	choice := fltk_bridge.NewChoice(r.X, r.Y, r.Width, r.Height, "")
 
 	dd := &UIDropdown{
-		raw: choice,
+		raw:             choice,
+		redrawSelection: choice.Redraw,
 	}
 	dd.v.BindRaw(choice)
 	dd.v.SetAutomationRole("combobox")
@@ -58,6 +60,7 @@ func (dd *UIDropdown) SetOptions(options []string) {
 	}
 	if len(options) > 0 {
 		dd.raw.SetValue(0)
+		dd.redraw()
 	}
 }
 
@@ -80,6 +83,13 @@ func (dd *UIDropdown) SelectedOption() string {
 func (dd *UIDropdown) SetSelectedIndex(index int) {
 	if index >= 0 && index < len(dd.options) {
 		dd.raw.SetValue(index)
+		dd.redraw()
+	}
+}
+
+func (dd *UIDropdown) redraw() {
+	if dd != nil && dd.redrawSelection != nil {
+		dd.redrawSelection()
 	}
 }
 
@@ -91,7 +101,7 @@ func (dd *UIDropdown) selectOption(index int) {
 	if index < 0 || index >= len(dd.options) {
 		return
 	}
-	dd.raw.SetValue(index)
+	dd.SetSelectedIndex(index)
 	if dd.onSelectionChanged != nil {
 		dd.onSelectionChanged(index, dd.options[index])
 	}
