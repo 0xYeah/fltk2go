@@ -32,6 +32,7 @@ type UITerminalView struct {
 	onResize   func(Size)
 	lastSize   Size
 	inputBound bool
+	stream     terminalStreamFilter
 }
 
 func NewUITerminalView(r *foundation.Rect) *UITerminalView {
@@ -75,7 +76,7 @@ func (t *UITerminalView) Raw() *fltk_bridge.Terminal {
 
 func (t *UITerminalView) Feed(data []byte) {
 	if t != nil && t.raw != nil {
-		t.raw.AppendBytes(data)
+		t.raw.AppendBytes(t.stream.Filter(data))
 	}
 }
 
@@ -102,6 +103,7 @@ func (t *UITerminalView) ClearHistory() {
 
 func (t *UITerminalView) Reset() {
 	if t != nil && t.raw != nil {
+		t.stream.Reset()
 		t.raw.Reset()
 	}
 }

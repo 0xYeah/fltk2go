@@ -7,6 +7,34 @@ import (
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 )
 
+func TestTerminalStreamFilterStripsShellMetadataAndPreservesDisplayCSI(t *testing.T) {
+	filter := terminalStreamFilter{}
+	chunks := [][]byte{
+		[]byte("before\x1b]0;ubuntu@host: ~"),
+		[]byte("\x07\x1b[?2004h\x1b[32m简体·繁體·Русский"),
+		[]byte("\x1b[0m\x1b[?2004l after"),
+	}
+	var got []byte
+	for _, chunk := range chunks {
+		got = append(got, filter.Filter(chunk)...)
+	}
+	want := []byte("before\x1b[32m简体·繁體·Русский\x1b[0m after")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("filtered stream = %q, want %q", got, want)
+	}
+}
+
+func TestTerminalStreamFilterHandlesSplitEscapeTerminators(t *testing.T) {
+	filter := terminalStreamFilter{}
+	var got []byte
+	for _, chunk := range [][]byte{[]byte("a\x1b"), []byte("]2;title\x1b"), []byte("\\b\x1b["), []byte("31mred")} {
+		got = append(got, filter.Filter(chunk)...)
+	}
+	if want := []byte("ab\x1b[31mred"); !bytes.Equal(got, want) {
+		t.Fatalf("filtered split stream = %q, want %q", got, want)
+	}
+}
+
 func TestEncodeKeyPreservesTerminalControlSemantics(t *testing.T) {
 	tests := []struct {
 		name    string
