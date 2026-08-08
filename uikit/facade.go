@@ -188,3 +188,7 @@ func Alert(title, message string) {
 func Choice(message string, options ...string) int {
 	return dialog.Choice(message, options...)
 }
+
+func TitledChoice(title, message string, options ...string) int {
+	return dialog.TitledChoice(title, message, options...)
+}

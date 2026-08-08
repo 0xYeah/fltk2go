@@ -16,6 +16,18 @@ func MessageBox(title, message string) {
 }
 
 func ChoiceDialog(message string, options ...string) int {
+	return choiceDialog("", message, options...)
+}
+
+// TitledChoiceDialog presents a native modal choice with an explicit window
+// title. Security and destructive confirmations should prefer this over the
+// legacy title-less ChoiceDialog so window managers and assistive tools expose
+// the purpose of the prompt.
+func TitledChoiceDialog(title, message string, options ...string) int {
+	return choiceDialog(title, message, options...)
+}
+
+func choiceDialog(title, message string, options ...string) int {
 	if len(options) == 0 || len(options) >= 3 {
 		panic("Unsupported number of ChoiceDialog options")
 	}
@@ -33,5 +45,10 @@ func ChoiceDialog(message string, options ...string) int {
 		option2 = C.CString(options[2])
 		defer C.free(unsafe.Pointer(option2))
 	}
-	return int(C.go_fltk_choice_dialog(messageStr, option0, option1, option2))
+	if title == "" {
+		return int(C.go_fltk_choice_dialog(messageStr, option0, option1, option2))
+	}
+	titleStr := C.CString(title)
+	defer C.free(unsafe.Pointer(titleStr))
+	return int(C.go_fltk_titled_choice_dialog(titleStr, messageStr, option0, option1, option2))
 }

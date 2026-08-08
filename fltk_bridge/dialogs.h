@@ -8,6 +8,8 @@ extern "C" {
 
   extern int go_fltk_choice_dialog(const char* message, const char* option0, const char* option1, const char* option2);
 
+  extern int go_fltk_titled_choice_dialog(const char* title, const char* message, const char* option0, const char* option1, const char* option2);
+
 #ifdef __cplusplus
 }
 #endif
