@@ -8,10 +8,11 @@ import (
 )
 
 type UIWindow struct {
-	raw     *fltk_bridge.Window
-	root    *view.UIView
-	closed  bool
-	onClose func()
+	raw            *fltk_bridge.Window
+	root           *view.UIView
+	closed         bool
+	onClose        func()
+	onCloseRequest func() bool
 }
 
 func NewUIWindow(width, height int, title string) *UIWindow {
@@ -44,7 +45,7 @@ func NewWindowWithRect(rect *foundation.Rect, title string) *UIWindow {
 	// Route the native window-manager close action through the same lifecycle
 	// used by application buttons. This gives owners one deterministic callback
 	// and guarantees that native widget/automation registrations are released.
-	win.SetCallback(func() { u.Close() })
+	win.SetCallback(func() { u.RequestClose() })
 
 	// root view 不一定需要 raw（它是“逻辑根”），但必须有 host（window）
 	u.root.BindHost(win)
@@ -93,6 +94,30 @@ func (w *UIWindow) OnClose(callback func()) {
 	w.onClose = callback
 }
 
+// OnCloseRequest registers a policy callback for user-originated close
+// requests, such as the window-manager close control or RequestClose. Return
+// false to keep the native window open. Owner teardown through Close bypasses
+// this policy so application shutdown and post-save cleanup remain explicit.
+func (w *UIWindow) OnCloseRequest(callback func() bool) {
+	if w == nil || w.closed {
+		return
+	}
+	w.onCloseRequest = callback
+}
+
+// RequestClose applies the user-close policy and closes the window only when
+// accepted. It reports true when the window is closed after the request.
+func (w *UIWindow) RequestClose() bool {
+	if w == nil || w.closed {
+		return true
+	}
+	if w.onCloseRequest != nil && !w.onCloseRequest() {
+		return false
+	}
+	w.Close()
+	return true
+}
+
 // Close hides and destroys the native window. It is safe to call repeatedly.
 // The window must be recreated after Close; Raw returns nil once closed.
 func (w *UIWindow) Close() {
@@ -104,6 +129,7 @@ func (w *UIWindow) Close() {
 	w.raw = nil
 	callback := w.onClose
 	w.onClose = nil
+	w.onCloseRequest = nil
 	if raw != nil {
 		raw.Hide()
 		raw.Destroy()
