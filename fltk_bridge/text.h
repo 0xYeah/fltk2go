@@ -33,6 +33,8 @@ extern "C" {
   extern int go_fltk_TextDisplay_move_down(Fl_Text_Display *d);
   extern void go_fltk_TextDisplay_show_insert_position(Fl_Text_Display *d);
   extern void go_fltk_TextDisplay_hide_cursor(Fl_Text_Display *d);
+  extern unsigned int go_fltk_TextDisplay_cursor_color(Fl_Text_Display *d);
+  extern void go_fltk_TextDisplay_set_cursor_color(Fl_Text_Display *d, unsigned int color);
   extern unsigned int go_fltk_TextDisplay_text_color(Fl_Text_Display *d);
   extern void go_fltk_TextDisplay_set_text_color(Fl_Text_Display* d, unsigned int color);
   extern int go_fltk_TextDisplay_text_font(Fl_Text_Display *d);

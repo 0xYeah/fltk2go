@@ -367,6 +367,16 @@ func (t *TextDisplay) HideCursor() {
 	C.go_fltk_TextDisplay_hide_cursor((*C.Fl_Text_Display)(t.ptr()))
 }
 
+// CursorColor gets the insertion caret color.
+func (t *TextDisplay) CursorColor() Color {
+	return Color(C.go_fltk_TextDisplay_cursor_color((*C.Fl_Text_Display)(t.ptr())))
+}
+
+// SetCursorColor styles the insertion caret independently from editable text.
+func (t *TextDisplay) SetCursorColor(color Color) {
+	C.go_fltk_TextDisplay_set_cursor_color((*C.Fl_Text_Display)(t.ptr()), C.uint(color))
+}
+
 // TextColor gets the default color of text in the widget.
 func (t *TextDisplay) TextColor() Color {
 	return Color(C.go_fltk_TextDisplay_text_color((*C.Fl_Text_Display)(t.ptr())))

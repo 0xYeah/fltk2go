@@ -138,6 +138,23 @@ func (t *UITextView) SetTextColor(rgb uint) {
 	}
 }
 
+// SetCursorColor styles the native insertion caret independently from text so
+// editable views remain visible on custom light and dark surfaces.
+func (t *UITextView) SetCursorColor(rgb uint) {
+	if t != nil && t.raw != nil {
+		t.raw.SetCursorColor(fltk_bridge.Color(rgb))
+		t.raw.Redraw()
+	}
+}
+
+// SetSelectionColor styles the native selection highlight.
+func (t *UITextView) SetSelectionColor(rgb uint) {
+	if t != nil && t.raw != nil {
+		t.raw.SetSelectionColor(fltk_bridge.Color(rgb))
+		t.raw.Redraw()
+	}
+}
+
 // SetFallbackFont styles matching Unicode runes with a second FLTK font while
 // preserving the primary font for all other text. It is intended for native
 // font stacks where one platform font cannot cover every required script (for

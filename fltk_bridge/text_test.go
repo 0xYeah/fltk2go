@@ -5,6 +5,15 @@ import (
 	"testing"
 )
 
+func TestTextEditorCursorColorRoundTrips(t *testing.T) {
+	editor := NewTextEditor(0, 0, 240, 80)
+	want := ColorFromRgb(78, 90, 123)
+	editor.SetCursorColor(want)
+	if got := editor.CursorColor(); got != want {
+		t.Fatalf("cursor color = %v, want %v", got, want)
+	}
+}
+
 func TestPanicWhenTestBufferIsMissing(t *testing.T) {
 	win := NewWindow(400, 400)
 	textEditor := NewTextEditor(2, 2, 300, 300, "")

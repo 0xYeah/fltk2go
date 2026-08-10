@@ -67,6 +67,14 @@ void go_fltk_TextDisplay_hide_cursor(Fl_Text_Display *d) {
   d->hide_cursor();
 }
 
+unsigned int go_fltk_TextDisplay_cursor_color(Fl_Text_Display *d) {
+  return d->cursor_color();
+}
+
+void go_fltk_TextDisplay_set_cursor_color(Fl_Text_Display *d, unsigned int color) {
+  d->cursor_color(color);
+}
+
 unsigned int go_fltk_TextDisplay_text_color(Fl_Text_Display *d) {
   return d->textcolor();
 }
