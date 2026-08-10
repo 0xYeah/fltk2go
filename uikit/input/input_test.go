@@ -3,8 +3,28 @@ package input
 import (
 	"testing"
 
+	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/uikit/view"
 )
+
+func TestInputAppearanceTargetsEditableTextAndCaret(t *testing.T) {
+	in := New(0, 0, 180, 34, "Name")
+	in.SetFont(fltk_bridge.COURIER)
+	in.SetFontSize(16)
+	in.SetTextColor(uint(fltk_bridge.ColorFromRgb(20, 30, 40)))
+	in.SetCursorColor(uint(fltk_bridge.ColorFromRgb(220, 230, 240)))
+
+	raw, ok := in.Raw().(*fltk_bridge.Input)
+	if !ok {
+		t.Fatalf("raw input type = %T", in.Raw())
+	}
+	if raw.TextFont() != fltk_bridge.COURIER || raw.TextSize() != 16 {
+		t.Fatalf("editable typography = font:%v size:%d", raw.TextFont(), raw.TextSize())
+	}
+	if raw.TextColor() != fltk_bridge.ColorFromRgb(20, 30, 40) || raw.CursorColor() != fltk_bridge.ColorFromRgb(220, 230, 240) {
+		t.Fatalf("editable colors = text:%v cursor:%v", raw.TextColor(), raw.CursorColor())
+	}
+}
 
 func TestSecretInputAutomationSnapshotDoesNotExposeText(t *testing.T) {
 	in := NewWithType(0, 0, 120, 24, "Password", SecretInput)

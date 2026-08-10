@@ -38,6 +38,40 @@ func (i *Input) Mark() int {
 	return int(C.go_fltk_Input_mark((*C.Fl_Input)(i.ptr())))
 }
 
+// TextFont returns the font used to draw editable text. This is distinct from
+// Widget.LabelFont, which styles only the external FLTK label.
+func (i *Input) TextFont() Font {
+	return Font(C.go_fltk_Input_textfont((*C.Fl_Input)(i.ptr())))
+}
+
+func (i *Input) SetTextFont(font Font) {
+	C.go_fltk_Input_set_textfont((*C.Fl_Input)(i.ptr()), C.int(font))
+}
+
+func (i *Input) TextSize() int {
+	return int(C.go_fltk_Input_textsize((*C.Fl_Input)(i.ptr())))
+}
+
+func (i *Input) SetTextSize(size int) {
+	C.go_fltk_Input_set_textsize((*C.Fl_Input)(i.ptr()), C.int(size))
+}
+
+func (i *Input) TextColor() Color {
+	return Color(C.go_fltk_Input_textcolor((*C.Fl_Input)(i.ptr())))
+}
+
+func (i *Input) SetTextColor(color Color) {
+	C.go_fltk_Input_set_textcolor((*C.Fl_Input)(i.ptr()), C.uint(color))
+}
+
+func (i *Input) CursorColor() Color {
+	return Color(C.go_fltk_Input_cursor_color((*C.Fl_Input)(i.ptr())))
+}
+
+func (i *Input) SetCursorColor(color Color) {
+	C.go_fltk_Input_set_cursor_color((*C.Fl_Input)(i.ptr()), C.uint(color))
+}
+
 type Output struct {
 	Input
 }

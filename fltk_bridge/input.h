@@ -21,6 +21,15 @@ extern "C" {
   void go_fltk_Input_set_insert_position(Fl_Input *in, int p, int m);
   int go_fltk_Input_insert_position(Fl_Input *in);
   int go_fltk_Input_mark(Fl_Input *in);
+
+  int go_fltk_Input_textfont(Fl_Input *in);
+  void go_fltk_Input_set_textfont(Fl_Input *in, int font);
+  int go_fltk_Input_textsize(Fl_Input *in);
+  void go_fltk_Input_set_textsize(Fl_Input *in, int size);
+  unsigned int go_fltk_Input_textcolor(Fl_Input *in);
+  void go_fltk_Input_set_textcolor(Fl_Input *in, unsigned int color);
+  unsigned int go_fltk_Input_cursor_color(Fl_Input *in);
+  void go_fltk_Input_set_cursor_color(Fl_Input *in, unsigned int color);
 		
   extern GOutput *go_fltk_new_Output(int x, int y, int w, int h, const char *text);
   extern GFloat_Input *go_fltk_new_Float_Input(int x, int y, int w, int h, const char *text);

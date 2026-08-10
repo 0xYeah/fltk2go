@@ -121,8 +121,8 @@ func (in *Input) Placeholder() string {
 // SetFontSize 设置字体大小
 func (in *Input) SetFontSize(size int) {
 	if in != nil && in.raw != nil {
-		if widget, ok := in.raw.(interface{ SetLabelSize(size int) }); ok {
-			widget.SetLabelSize(size)
+		if widget, ok := in.raw.(interface{ SetTextSize(size int) }); ok {
+			widget.SetTextSize(size)
 		}
 	}
 }
@@ -130,8 +130,8 @@ func (in *Input) SetFontSize(size int) {
 // SetFont 设置字体
 func (in *Input) SetFont(font fltk_bridge.Font) {
 	if in != nil && in.raw != nil {
-		if widget, ok := in.raw.(interface{ SetLabelFont(font fltk_bridge.Font) }); ok {
-			widget.SetLabelFont(font)
+		if widget, ok := in.raw.(interface{ SetTextFont(font fltk_bridge.Font) }); ok {
+			widget.SetTextFont(font)
 		}
 	}
 }
@@ -139,8 +139,18 @@ func (in *Input) SetFont(font fltk_bridge.Font) {
 // SetTextColor 设置文本颜色
 func (in *Input) SetTextColor(color uint) {
 	if in != nil && in.raw != nil {
-		if widget, ok := in.raw.(interface{ SetLabelColor(col fltk_bridge.Color) }); ok {
-			widget.SetLabelColor(fltk_bridge.Color(color))
+		if widget, ok := in.raw.(interface{ SetTextColor(col fltk_bridge.Color) }); ok {
+			widget.SetTextColor(fltk_bridge.Color(color))
+		}
+	}
+}
+
+// SetCursorColor styles the native insertion caret independently from text and
+// background colors so dark and high-contrast input themes remain usable.
+func (in *Input) SetCursorColor(color uint) {
+	if in != nil && in.raw != nil {
+		if widget, ok := in.raw.(interface{ SetCursorColor(col fltk_bridge.Color) }); ok {
+			widget.SetCursorColor(fltk_bridge.Color(color))
 		}
 	}
 }
