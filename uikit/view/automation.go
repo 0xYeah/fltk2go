@@ -282,18 +282,46 @@ func AutomationSnapshot() []AutomationNode {
 	automationRegistry.RUnlock()
 
 	nodes := make([]AutomationNode, 0, len(views))
+	registered := make(map[*UIView]bool, len(views))
 	for _, v := range views {
 		if v != nil {
-			nodes = append(nodes, v.AutomationSnapshot())
+			registered[v] = true
+		}
+	}
+	visited := make(map[*UIView]bool, len(views))
+	// Serialize registered semantic roots first. Registered descendants remain
+	// discoverable through their parent's Children field, but are not repeated as
+	// additional top-level nodes.
+	for _, v := range views {
+		if v != nil && !v.hasRegisteredAutomationAncestor(registered, nil) {
+			if node, ok := v.automationSnapshot(visited); ok {
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	// A malformed parent cycle has no root. Preserve observability without
+	// recursion or duplicate IDs by emitting the first unvisited registered node.
+	for _, v := range views {
+		if node, ok := v.automationSnapshot(visited); ok {
+			nodes = append(nodes, node)
 		}
 	}
 	return nodes
 }
 
 func (v *UIView) AutomationSnapshot() AutomationNode {
-	if v == nil {
+	node, ok := v.automationSnapshot(make(map[*UIView]bool))
+	if !ok {
 		return AutomationNode{}
 	}
+	return node
+}
+
+func (v *UIView) automationSnapshot(visited map[*UIView]bool) (AutomationNode, bool) {
+	if v == nil || visited[v] {
+		return AutomationNode{}, false
+	}
+	visited[v] = true
 	node := AutomationNode{
 		ID:      v.automation.id,
 		Role:    v.automation.role,
@@ -332,10 +360,35 @@ func (v *UIView) AutomationSnapshot() AutomationNode {
 	if len(v.automation.children) > 0 {
 		node.Children = make([]AutomationNode, 0, len(v.automation.children))
 		for _, child := range v.automation.children {
-			node.Children = append(node.Children, child.AutomationSnapshot())
+			if childNode, ok := child.automationSnapshot(visited); ok {
+				node.Children = append(node.Children, childNode)
+			}
 		}
 	}
-	return node
+	return node, true
+}
+
+func (v *UIView) hasRegisteredAutomationAncestor(registered map[*UIView]bool, visiting map[*UIView]bool) bool {
+	if v == nil || len(v.automation.parents) == 0 {
+		return false
+	}
+	if visiting == nil {
+		visiting = make(map[*UIView]bool)
+	}
+	if visiting[v] {
+		return false
+	}
+	visiting[v] = true
+	defer delete(visiting, v)
+	for parent := range v.automation.parents {
+		if parent == nil {
+			continue
+		}
+		if registered[parent] || parent.hasRegisteredAutomationAncestor(registered, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *UIView) automationEffectiveVisible(visiting map[*UIView]bool) bool {

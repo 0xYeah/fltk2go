@@ -97,6 +97,62 @@ func TestAutomationIDLifecycleAndChildren(t *testing.T) {
 	}
 }
 
+func TestGlobalAutomationSnapshotSerializesRegisteredHierarchyOnce(t *testing.T) {
+	parent := (&UIView{}).SetAutomationID("snapshot.parent")
+	child := (&UIView{}).SetAutomationID("snapshot.child")
+	grandchild := (&UIView{}).SetAutomationID("snapshot.grandchild")
+	defer parent.SetAutomationID("")
+	defer child.SetAutomationID("")
+	defer grandchild.SetAutomationID("")
+
+	parent.AddAutomationChild(child)
+	child.AddAutomationChild(grandchild)
+
+	nodes := AutomationSnapshot()
+	counts := map[string]int{}
+	var walk func([]AutomationNode)
+	walk = func(current []AutomationNode) {
+		for _, node := range current {
+			if node.ID != "" {
+				counts[node.ID]++
+			}
+			walk(node.Children)
+		}
+	}
+	walk(nodes)
+	for _, id := range []string{"snapshot.parent", "snapshot.child", "snapshot.grandchild"} {
+		if counts[id] != 1 {
+			t.Fatalf("automation id %q serialized %d times, want once: %#v", id, counts[id], nodes)
+		}
+	}
+}
+
+func TestAutomationSnapshotTerminatesSemanticCycles(t *testing.T) {
+	first := (&UIView{}).SetAutomationID("cycle.first")
+	second := (&UIView{}).SetAutomationID("cycle.second")
+	defer first.SetAutomationID("")
+	defer second.SetAutomationID("")
+
+	first.AddAutomationChild(second)
+	second.AddAutomationChild(first)
+
+	nodes := AutomationSnapshot()
+	counts := map[string]int{}
+	var walk func([]AutomationNode)
+	walk = func(current []AutomationNode) {
+		for _, node := range current {
+			if node.ID != "" {
+				counts[node.ID]++
+			}
+			walk(node.Children)
+		}
+	}
+	walk(nodes)
+	if counts["cycle.first"] != 1 || counts["cycle.second"] != 1 {
+		t.Fatalf("cyclic automation hierarchy was not serialized once: counts=%#v nodes=%#v", counts, nodes)
+	}
+}
+
 func TestAutomationIDReplacementKeepsNewestOwnerRegistered(t *testing.T) {
 	oldView := (&UIView{}).SetAutomationID("rebuild.shared")
 	newView := (&UIView{}).SetAutomationID("rebuild.shared")
