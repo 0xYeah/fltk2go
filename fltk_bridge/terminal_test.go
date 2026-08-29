@@ -44,6 +44,15 @@ func TestTerminalResetAndClear(t *testing.T) {
 	}
 }
 
+func TestTerminalSelectionIsEmptyBeforeMouseSelection(t *testing.T) {
+	terminal := NewTerminal(0, 0, 320, 160)
+	defer terminal.Destroy()
+	terminal.Append("copy me")
+	if got := terminal.SelectedText(); got != "" {
+		t.Fatalf("selected text before selection = %q, want empty", got)
+	}
+}
+
 func TestTerminalFitsColumnsAfterNativeResize(t *testing.T) {
 	terminal := NewTerminal(0, 0, 900, 500)
 	defer terminal.Destroy()

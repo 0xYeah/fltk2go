@@ -22,6 +22,26 @@ type KeyEvent struct {
 	State int
 }
 
+type terminalClipboardAction uint8
+
+const (
+	terminalClipboardNone terminalClipboardAction = iota
+	terminalClipboardCopy
+	terminalClipboardPaste
+)
+
+func clipboardActionForKey(event KeyEvent) terminalClipboardAction {
+	ctrl := event.State&fltk_bridge.CTRL != 0
+	shift := event.State&fltk_bridge.SHIFT != 0
+	if ctrl && shift && (event.Key == int('c') || event.Key == int('C')) {
+		return terminalClipboardCopy
+	}
+	if (ctrl && shift && (event.Key == int('v') || event.Key == int('V'))) || (shift && !ctrl && event.Key == fltk_bridge.INSERT) {
+		return terminalClipboardPaste
+	}
+	return terminalClipboardNone
+}
+
 // UITerminalView is a native ANSI/VT presentation and input surface. It owns
 // terminal parsing, scrollback, selection, focus, and key-sequence translation;
 // it intentionally does not own a process or network connection.
@@ -179,7 +199,18 @@ func (t *UITerminalView) OnInput(handler func([]byte)) {
 	}
 	t.inputBound = true
 	t.v.On(fltk_bridge.KEYDOWN, func(fltk_bridge.Event) bool {
-		data, handled := EncodeKey(KeyEvent{Key: fltk_bridge.EventKey(), Text: fltk_bridge.EventText(), State: fltk_bridge.EventState()})
+		event := KeyEvent{Key: fltk_bridge.EventKey(), Text: fltk_bridge.EventText(), State: fltk_bridge.EventState()}
+		switch clipboardActionForKey(event) {
+		case terminalClipboardCopy:
+			if selected := t.raw.SelectedText(); selected != "" {
+				fltk_bridge.CopyToClipboard(selected)
+			}
+			return true
+		case terminalClipboardPaste:
+			t.raw.PasteClipboard()
+			return true
+		}
+		data, handled := EncodeKey(event)
 		if !handled || len(data) == 0 || t.onInput == nil {
 			return false
 		}
@@ -232,15 +263,15 @@ func (t *UITerminalView) SetAutomationName(name string) *UITerminalView {
 }
 
 // EncodeKey translates native key events into conventional xterm input bytes.
-// Ctrl+C/D/Z remain distinct ETX/EOT/SUB bytes. Ctrl+Shift+C is intentionally
-// left to the native widget's selection-copy behavior.
+// Ctrl+C/D/Z remain distinct ETX/EOT/SUB bytes. Clipboard shortcuts are routed
+// by UITerminalView and must never leak control bytes into the PTY.
 func EncodeKey(event KeyEvent) ([]byte, bool) {
+	if clipboardActionForKey(event) != terminalClipboardNone {
+		return nil, false
+	}
 	ctrl := event.State&fltk_bridge.CTRL != 0
 	shift := event.State&fltk_bridge.SHIFT != 0
 	alt := event.State&fltk_bridge.ALT != 0
-	if ctrl && shift && (event.Key == int('c') || event.Key == int('C')) {
-		return nil, false
-	}
 
 	var data []byte
 	switch event.Key {

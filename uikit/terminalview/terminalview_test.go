@@ -49,6 +49,8 @@ func TestEncodeKeyPreservesTerminalControlSemantics(t *testing.T) {
 		{name: "ctrl d", event: KeyEvent{Key: 'd', State: fltk_bridge.CTRL}, want: []byte{0x04}, handled: true},
 		{name: "ctrl z", event: KeyEvent{Key: 'z', State: fltk_bridge.CTRL}, want: []byte{0x1a}, handled: true},
 		{name: "native copy", event: KeyEvent{Key: 'c', State: fltk_bridge.CTRL | fltk_bridge.SHIFT}, handled: false},
+		{name: "native paste", event: KeyEvent{Key: 'v', State: fltk_bridge.CTRL | fltk_bridge.SHIFT}, handled: false},
+		{name: "shift insert paste", event: KeyEvent{Key: fltk_bridge.INSERT, State: fltk_bridge.SHIFT}, handled: false},
 		{name: "unicode commit", event: KeyEvent{Key: '中', Text: "中"}, want: []byte("中"), handled: true},
 		{name: "alt unicode", event: KeyEvent{Key: 'ж', Text: "ж", State: fltk_bridge.ALT}, want: append([]byte{0x1b}, []byte("ж")...), handled: true},
 		{name: "up", event: KeyEvent{Key: fltk_bridge.UP}, want: []byte("\x1b[A"), handled: true},
@@ -70,5 +72,27 @@ func TestEncodeKeyRejectsNULTextAndUnknownKeys(t *testing.T) {
 		if got, handled := EncodeKey(event); handled || got != nil {
 			t.Fatalf("EncodeKey(%+v) = %v, %t; want nil, false", event, got, handled)
 		}
+	}
+}
+
+func TestTerminalClipboardShortcutRouting(t *testing.T) {
+	tests := []struct {
+		name  string
+		event KeyEvent
+		want  terminalClipboardAction
+	}{
+		{name: "copy", event: KeyEvent{Key: 'c', State: fltk_bridge.CTRL | fltk_bridge.SHIFT}, want: terminalClipboardCopy},
+		{name: "uppercase copy", event: KeyEvent{Key: 'C', State: fltk_bridge.CTRL | fltk_bridge.SHIFT}, want: terminalClipboardCopy},
+		{name: "paste", event: KeyEvent{Key: 'v', State: fltk_bridge.CTRL | fltk_bridge.SHIFT}, want: terminalClipboardPaste},
+		{name: "shift insert", event: KeyEvent{Key: fltk_bridge.INSERT, State: fltk_bridge.SHIFT}, want: terminalClipboardPaste},
+		{name: "interrupt", event: KeyEvent{Key: 'c', State: fltk_bridge.CTRL}, want: terminalClipboardNone},
+		{name: "quoted insert", event: KeyEvent{Key: fltk_bridge.INSERT, State: fltk_bridge.CTRL}, want: terminalClipboardNone},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := clipboardActionForKey(test.event); got != test.want {
+				t.Fatalf("clipboardActionForKey(%+v) = %v, want %v", test.event, got, test.want)
+			}
+		})
 	}
 }

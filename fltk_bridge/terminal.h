@@ -12,6 +12,8 @@ typedef struct GTerminal GTerminal;
 GTerminal *go_fltk_new_Terminal(int x, int y, int w, int h, const char *label);
 void go_fltk_Terminal_append(Fl_Terminal *terminal, const char *data, int length);
 char *go_fltk_Terminal_text(Fl_Terminal *terminal, int lines_below_cursor);
+char *go_fltk_Terminal_selected_text(Fl_Terminal *terminal);
+void go_fltk_Terminal_paste_clipboard(Fl_Terminal *terminal);
 void go_fltk_Terminal_clear(Fl_Terminal *terminal);
 void go_fltk_Terminal_clear_history(Fl_Terminal *terminal);
 void go_fltk_Terminal_reset(Fl_Terminal *terminal);

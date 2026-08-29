@@ -38,6 +38,20 @@ char *go_fltk_Terminal_text(Fl_Terminal *terminal, int lines_below_cursor) {
   return copy;
 }
 
+char *go_fltk_Terminal_selected_text(Fl_Terminal *terminal) {
+  const char *text = terminal ? terminal->selection_text() : "";
+  if (!text) text = "";
+  const size_t length = std::strlen(text);
+  char *copy = static_cast<char *>(std::malloc(length + 1));
+  if (!copy) return nullptr;
+  std::memcpy(copy, text, length + 1);
+  return copy;
+}
+
+void go_fltk_Terminal_paste_clipboard(Fl_Terminal *terminal) {
+  if (terminal) Fl::paste(*terminal, 1);
+}
+
 void go_fltk_Terminal_clear(Fl_Terminal *terminal) {
   if (terminal) terminal->clear_screen_home(false);
 }

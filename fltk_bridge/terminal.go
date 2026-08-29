@@ -54,6 +54,24 @@ func (t *Terminal) Text(linesBelowCursor ...bool) string {
 	return C.GoString(value)
 }
 
+// SelectedText returns a copy of the current native mouse selection. It is
+// intentionally separate from Text so clipboard actions cannot accidentally
+// copy the complete scrollback buffer.
+func (t *Terminal) SelectedText() string {
+	value := C.go_fltk_Terminal_selected_text(t.ptrTerminal())
+	if value == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(value))
+	return C.GoString(value)
+}
+
+// PasteClipboard requests FLTK clipboard contents for this terminal. Delivery
+// arrives as a normal PASTE event and is forwarded by UITerminalView.OnInput.
+func (t *Terminal) PasteClipboard() {
+	C.go_fltk_Terminal_paste_clipboard(t.ptrTerminal())
+}
+
 func (t *Terminal) Clear()        { C.go_fltk_Terminal_clear(t.ptrTerminal()) }
 func (t *Terminal) ClearHistory() { C.go_fltk_Terminal_clear_history(t.ptrTerminal()) }
 func (t *Terminal) Reset()        { C.go_fltk_Terminal_reset(t.ptrTerminal()) }
