@@ -66,3 +66,28 @@ func TestTerminalFitsColumnsAfterNativeResize(t *testing.T) {
 		t.Fatalf("terminal display columns = %d, want fitted %d", got, after)
 	}
 }
+
+func TestTerminalScrollOffsetClampsToHistory(t *testing.T) {
+	window := NewWindow(480, 180, "terminal scroll test")
+	terminal := NewTerminal(0, 0, 480, 180)
+	window.End()
+	defer window.Destroy()
+	terminal.SetHistoryRows(128)
+	for row := 0; row < 80; row++ {
+		terminal.Append("scrollback row\n")
+	}
+	window.Show()
+	Check()
+	maximum := terminal.ScrollMaximum()
+	if maximum <= 0 {
+		t.Fatalf("terminal did not expose scrollback maximum after output: %d", maximum)
+	}
+	terminal.ScrollTo(maximum + 100)
+	if got := terminal.ScrollOffset(); got != maximum {
+		t.Fatalf("scroll offset above history = %d, want %d", got, maximum)
+	}
+	terminal.ScrollTo(-100)
+	if got := terminal.ScrollOffset(); got != 0 {
+		t.Fatalf("negative scroll offset = %d, want live bottom", got)
+	}
+}

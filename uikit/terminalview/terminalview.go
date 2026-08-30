@@ -30,6 +30,16 @@ const (
 	terminalClipboardPaste
 )
 
+type terminalScrollAction uint8
+
+const (
+	terminalScrollNone terminalScrollAction = iota
+	terminalScrollPageUp
+	terminalScrollPageDown
+	terminalScrollTop
+	terminalScrollBottom
+)
+
 func clipboardActionForKey(event KeyEvent) terminalClipboardAction {
 	ctrl := event.State&fltk_bridge.CTRL != 0
 	shift := event.State&fltk_bridge.SHIFT != 0
@@ -40,6 +50,24 @@ func clipboardActionForKey(event KeyEvent) terminalClipboardAction {
 		return terminalClipboardPaste
 	}
 	return terminalClipboardNone
+}
+
+func scrollActionForKey(event KeyEvent) terminalScrollAction {
+	if event.State&fltk_bridge.SHIFT == 0 || event.State&fltk_bridge.CTRL != 0 || event.State&fltk_bridge.ALT != 0 {
+		return terminalScrollNone
+	}
+	switch event.Key {
+	case fltk_bridge.PAGE_UP:
+		return terminalScrollPageUp
+	case fltk_bridge.PAGE_DOWN:
+		return terminalScrollPageDown
+	case fltk_bridge.HOME:
+		return terminalScrollTop
+	case fltk_bridge.END:
+		return terminalScrollBottom
+	default:
+		return terminalScrollNone
+	}
 }
 
 // UITerminalView is a native ANSI/VT presentation and input surface. It owns
@@ -166,6 +194,36 @@ func (t *UITerminalView) SetHistoryRows(rows int) {
 	}
 }
 
+// ScrollOffset reports history rows above the live bottom. ScrollToOffset and
+// ScrollByRows provide transport-neutral scrollback navigation for application
+// controls in addition to the built-in Shift+PageUp/PageDown/Home/End keys.
+func (t *UITerminalView) ScrollOffset() int {
+	if t == nil || t.raw == nil {
+		return 0
+	}
+	return t.raw.ScrollOffset()
+}
+
+func (t *UITerminalView) ScrollToOffset(rowsFromBottom int) {
+	if t != nil && t.raw != nil {
+		t.raw.ScrollTo(rowsFromBottom)
+	}
+}
+
+func (t *UITerminalView) ScrollByRows(rows int) {
+	if t != nil && t.raw != nil {
+		t.raw.ScrollTo(t.raw.ScrollOffset() + rows)
+	}
+}
+
+func (t *UITerminalView) ScrollToTop() {
+	if t != nil && t.raw != nil {
+		t.raw.ScrollTo(t.raw.ScrollMaximum())
+	}
+}
+
+func (t *UITerminalView) ScrollToBottom() { t.ScrollToOffset(0) }
+
 func (t *UITerminalView) SetMargins(left, top, right, bottom int) {
 	if t != nil && t.raw != nil {
 		t.raw.SetMargins(left, top, right, bottom)
@@ -208,6 +266,20 @@ func (t *UITerminalView) OnInput(handler func([]byte)) {
 			return true
 		case terminalClipboardPaste:
 			t.raw.PasteClipboard()
+			return true
+		}
+		switch scrollActionForKey(event) {
+		case terminalScrollPageUp:
+			t.ScrollByRows(max(1, t.Size().Rows-1))
+			return true
+		case terminalScrollPageDown:
+			t.ScrollByRows(-max(1, t.Size().Rows-1))
+			return true
+		case terminalScrollTop:
+			t.ScrollToTop()
+			return true
+		case terminalScrollBottom:
+			t.ScrollToBottom()
 			return true
 		}
 		data, handled := EncodeKey(event)
@@ -266,7 +338,7 @@ func (t *UITerminalView) SetAutomationName(name string) *UITerminalView {
 // Ctrl+C/D/Z remain distinct ETX/EOT/SUB bytes. Clipboard shortcuts are routed
 // by UITerminalView and must never leak control bytes into the PTY.
 func EncodeKey(event KeyEvent) ([]byte, bool) {
-	if clipboardActionForKey(event) != terminalClipboardNone {
+	if clipboardActionForKey(event) != terminalClipboardNone || scrollActionForKey(event) != terminalScrollNone {
 		return nil, false
 	}
 	ctrl := event.State&fltk_bridge.CTRL != 0

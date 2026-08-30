@@ -96,3 +96,32 @@ func TestTerminalClipboardShortcutRouting(t *testing.T) {
 		})
 	}
 }
+
+func TestTerminalScrollbackShortcutRouting(t *testing.T) {
+	tests := []struct {
+		name  string
+		event KeyEvent
+		want  terminalScrollAction
+	}{
+		{name: "page up", event: KeyEvent{Key: fltk_bridge.PAGE_UP, State: fltk_bridge.SHIFT}, want: terminalScrollPageUp},
+		{name: "page down", event: KeyEvent{Key: fltk_bridge.PAGE_DOWN, State: fltk_bridge.SHIFT}, want: terminalScrollPageDown},
+		{name: "history start", event: KeyEvent{Key: fltk_bridge.HOME, State: fltk_bridge.SHIFT}, want: terminalScrollTop},
+		{name: "live bottom", event: KeyEvent{Key: fltk_bridge.END, State: fltk_bridge.SHIFT}, want: terminalScrollBottom},
+		{name: "plain page up remains PTY input", event: KeyEvent{Key: fltk_bridge.PAGE_UP}, want: terminalScrollNone},
+		{name: "ctrl shift page up remains available", event: KeyEvent{Key: fltk_bridge.PAGE_UP, State: fltk_bridge.CTRL | fltk_bridge.SHIFT}, want: terminalScrollNone},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := scrollActionForKey(test.event); got != test.want {
+				t.Fatalf("scrollActionForKey(%+v) = %v, want %v", test.event, got, test.want)
+			}
+			_, handled := EncodeKey(test.event)
+			if test.want != terminalScrollNone && handled {
+				t.Fatalf("local scroll shortcut reached PTY encoding: %+v", test.event)
+			}
+			if test.want == terminalScrollNone && !handled {
+				t.Fatalf("non-scroll shortcut was lost: %+v", test.event)
+			}
+		})
+	}
+}

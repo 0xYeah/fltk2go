@@ -95,6 +95,22 @@ func (t *Terminal) FitDisplayColumns() int {
 	return int(C.go_fltk_Terminal_fit_display_columns((*C.GTerminal)(unsafe.Pointer(t.ptr()))))
 }
 
+// ScrollOffset reports how many history rows the viewport is above the live
+// bottom. Zero means the latest terminal output is visible.
+func (t *Terminal) ScrollOffset() int {
+	return int(C.go_fltk_Terminal_scroll_offset(t.ptrTerminal()))
+}
+
+func (t *Terminal) ScrollMaximum() int {
+	return int(C.go_fltk_Terminal_scroll_maximum(t.ptrTerminal()))
+}
+
+// ScrollTo moves the viewport to a clamped history offset measured in rows
+// above the live bottom.
+func (t *Terminal) ScrollTo(rowsFromBottom int) {
+	C.go_fltk_Terminal_scroll_to(t.ptrTerminal(), C.int(rowsFromBottom))
+}
+
 // TerminalScrollbarStyle controls the native terminal's horizontal scrollbar.
 type TerminalScrollbarStyle int
 

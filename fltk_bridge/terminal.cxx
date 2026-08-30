@@ -92,6 +92,25 @@ int go_fltk_Terminal_fit_display_columns(GTerminal *terminal) {
   return terminal ? terminal->fit_display_columns() : 0;
 }
 
+int go_fltk_Terminal_scroll_offset(Fl_Terminal *terminal) {
+  return terminal && terminal->scrollbar ? static_cast<int>(terminal->scrollbar->value()) : 0;
+}
+
+int go_fltk_Terminal_scroll_maximum(Fl_Terminal *terminal) {
+  return terminal ? terminal->history_use() : 0;
+}
+
+void go_fltk_Terminal_scroll_to(Fl_Terminal *terminal, int rows_from_bottom) {
+  if (!terminal || !terminal->scrollbar) return;
+  const int maximum = terminal->history_use();
+  if (rows_from_bottom < 0) rows_from_bottom = 0;
+  if (rows_from_bottom > maximum) rows_from_bottom = maximum;
+  terminal->scrollbar->maximum(maximum);
+  terminal->scrollbar->value(rows_from_bottom);
+  terminal->scrollbar->do_callback();
+  terminal->redraw();
+}
+
 void go_fltk_Terminal_set_horizontal_scrollbar(Fl_Terminal *terminal, int style) {
   if (terminal) terminal->hscrollbar_style(static_cast<Fl_Terminal::ScrollbarStyle>(style));
 }
