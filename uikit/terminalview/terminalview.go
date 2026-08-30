@@ -80,7 +80,13 @@ type UITerminalView struct {
 	onResize   func(Size)
 	lastSize   Size
 	inputBound bool
+	shortcuts  []terminalShortcut
 	stream     terminalStreamFilter
+}
+
+type terminalShortcut struct {
+	shortcut int
+	handler  func()
 }
 
 func NewUITerminalView(r *foundation.Rect) *UITerminalView {
@@ -244,6 +250,36 @@ func (t *UITerminalView) Size() Size {
 	return Size{Columns: t.raw.DisplayColumns(), Rows: t.raw.DisplayRows()}
 }
 
+// OnShortcut registers an application command that takes priority over PTY/SSH
+// input while this terminal owns focus. This is the terminal counterpart to a
+// window shortcut: consuming controls can handle global search/settings commands
+// without leaking their control bytes to the attached session.
+func (t *UITerminalView) OnShortcut(shortcut int, handler func()) {
+	if t == nil || shortcut == 0 || handler == nil {
+		return
+	}
+	for i := range t.shortcuts {
+		if t.shortcuts[i].shortcut == shortcut {
+			t.shortcuts[i].handler = handler
+			return
+		}
+	}
+	t.shortcuts = append(t.shortcuts, terminalShortcut{shortcut: shortcut, handler: handler})
+}
+
+func (t *UITerminalView) dispatchShortcut(matches func(int) bool) bool {
+	if t == nil || matches == nil {
+		return false
+	}
+	for _, shortcut := range t.shortcuts {
+		if matches(shortcut.shortcut) {
+			shortcut.handler()
+			return true
+		}
+	}
+	return false
+}
+
 // OnInput receives exact terminal bytes for printable/IME text, control keys,
 // navigation keys, and paste commits. Returning ownership to the caller keeps
 // PTY and SSH lifecycle outside the reusable native widget.
@@ -258,6 +294,9 @@ func (t *UITerminalView) OnInput(handler func([]byte)) {
 	t.inputBound = true
 	t.v.On(fltk_bridge.KEYDOWN, func(fltk_bridge.Event) bool {
 		event := KeyEvent{Key: fltk_bridge.EventKey(), Text: fltk_bridge.EventText(), State: fltk_bridge.EventState()}
+		if t.dispatchShortcut(fltk_bridge.TestShortcut) {
+			return true
+		}
 		switch clipboardActionForKey(event) {
 		case terminalClipboardCopy:
 			if selected := t.raw.SelectedText(); selected != "" {

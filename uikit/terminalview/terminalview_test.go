@@ -125,3 +125,22 @@ func TestTerminalScrollbackShortcutRouting(t *testing.T) {
 		})
 	}
 }
+
+func TestTerminalShortcutCommandsRunBeforePTYInput(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	shortcut := fltk_bridge.CTRL + int('k')
+	commands := 0
+	input := make([]byte, 0)
+	terminal.OnShortcut(shortcut, func() { commands++ })
+	terminal.OnInput(func(data []byte) { input = append(input, data...) })
+
+	if !terminal.dispatchShortcut(func(candidate int) bool { return candidate == shortcut }) {
+		t.Fatal("registered terminal shortcut was not dispatched")
+	}
+	if commands != 1 || len(input) != 0 {
+		t.Fatalf("terminal shortcut leaked to PTY input: commands=%d input=%q", commands, input)
+	}
+	if terminal.dispatchShortcut(func(int) bool { return false }) {
+		t.Fatal("unmatched key must remain available to terminal input")
+	}
+}
