@@ -13,6 +13,12 @@ type UIWindow struct {
 	closed         bool
 	onClose        func()
 	onCloseRequest func() bool
+	shortcuts      []windowShortcut
+}
+
+type windowShortcut struct {
+	shortcut int
+	handler  func()
 }
 
 func NewUIWindow(width, height int, title string) *UIWindow {
@@ -46,6 +52,12 @@ func NewWindowWithRect(rect *foundation.Rect, title string) *UIWindow {
 	// used by application buttons. This gives owners one deterministic callback
 	// and guarantees that native widget/automation registrations are released.
 	win.SetCallback(func() { u.RequestClose() })
+	win.SetEventHandler(func(event fltk_bridge.Event) bool {
+		if event != fltk_bridge.SHORTCUT {
+			return false
+		}
+		return u.dispatchShortcut(fltk_bridge.TestShortcut)
+	})
 
 	// root view 不一定需要 raw（它是“逻辑根”），但必须有 host（window）
 	u.root.BindHost(win)
@@ -83,6 +95,36 @@ func (w *UIWindow) Raw() *fltk_bridge.Window {
 		return nil
 	}
 	return w.raw
+}
+
+// OnShortcut registers a window-scoped native keyboard command. Shortcuts are
+// evaluated when FLTK delivers a SHORTCUT event after the focused child leaves
+// the key unhandled, so text fields, terminals and tables keep their ordinary
+// key behavior. Registering the same shortcut again replaces its command.
+func (w *UIWindow) OnShortcut(shortcut int, handler func()) {
+	if w == nil || w.closed || shortcut == 0 || handler == nil {
+		return
+	}
+	for i := range w.shortcuts {
+		if w.shortcuts[i].shortcut == shortcut {
+			w.shortcuts[i].handler = handler
+			return
+		}
+	}
+	w.shortcuts = append(w.shortcuts, windowShortcut{shortcut: shortcut, handler: handler})
+}
+
+func (w *UIWindow) dispatchShortcut(matches func(int) bool) bool {
+	if w == nil || w.closed || matches == nil {
+		return false
+	}
+	for _, shortcut := range w.shortcuts {
+		if matches(shortcut.shortcut) {
+			shortcut.handler()
+			return true
+		}
+	}
+	return false
 }
 
 // OnClose registers a lifecycle callback invoked exactly once when Close is
@@ -130,6 +172,7 @@ func (w *UIWindow) Close() {
 	callback := w.onClose
 	w.onClose = nil
 	w.onCloseRequest = nil
+	w.shortcuts = nil
 	if raw != nil {
 		raw.Hide()
 		raw.Destroy()
