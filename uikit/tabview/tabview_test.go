@@ -79,6 +79,41 @@ func TestUITabView_SelectTab(t *testing.T) {
 	}
 }
 
+func TestUITabViewSelectAdjacentWrapsAndNotifies(t *testing.T) {
+	tv := tabview.NewUITabView(nil)
+	tv.AddTabWithID("one", "One", nil)
+	tv.AddTabWithID("two", "Two", nil)
+	tv.AddTabWithID("three", "Three", nil)
+
+	var changed []int
+	tv.OnTabChanged(func(index int) { changed = append(changed, index) })
+
+	if !tv.SelectPrevious() || tv.ActiveIndex() != 2 {
+		t.Fatalf("previous from first did not wrap: active=%d", tv.ActiveIndex())
+	}
+	if !tv.SelectNext() || tv.ActiveIndex() != 0 {
+		t.Fatalf("next from last did not wrap: active=%d", tv.ActiveIndex())
+	}
+	if got, want := changed, []int{2, 0}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("selection callbacks = %#v, want %#v", got, want)
+	}
+}
+
+func TestUITabViewSelectAdjacentRequiresMultipleTabs(t *testing.T) {
+	var nilTabs *tabview.UITabView
+	if nilTabs.SelectNext() || nilTabs.SelectPrevious() {
+		t.Fatal("nil tab view reported a selection change")
+	}
+	tv := tabview.NewUITabView(nil)
+	if tv.SelectNext() || tv.SelectPrevious() {
+		t.Fatal("empty tab view reported a selection change")
+	}
+	tv.AddTabWithID("only", "Only", nil)
+	if tv.SelectNext() || tv.SelectPrevious() || tv.ActiveIndex() != 0 {
+		t.Fatalf("single tab should remain stable: active=%d", tv.ActiveIndex())
+	}
+}
+
 func TestUITabViewStableIDsAndDynamicRemoval(t *testing.T) {
 	tv := tabview.NewUITabView(nil)
 	tv.SetAutomationID("sessions")

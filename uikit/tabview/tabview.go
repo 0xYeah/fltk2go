@@ -353,6 +353,28 @@ func (tv *UITabView) SelectTab(index int) {
 	tv.selectTab(index, true)
 }
 
+// SelectNext activates the next tab, wrapping from the final tab to the first.
+// It reports whether the active tab changed so callers can preserve ordinary key
+// behavior when fewer than two tabs exist.
+func (tv *UITabView) SelectNext() bool {
+	return tv.selectAdjacent(1)
+}
+
+// SelectPrevious activates the previous tab, wrapping from the first tab to the
+// final tab.
+func (tv *UITabView) SelectPrevious() bool {
+	return tv.selectAdjacent(-1)
+}
+
+func (tv *UITabView) selectAdjacent(delta int) bool {
+	if tv == nil || len(tv.tabs) < 2 || tv.activeIndex < 0 || tv.activeIndex >= len(tv.tabs) {
+		return false
+	}
+	next := (tv.activeIndex + delta + len(tv.tabs)) % len(tv.tabs)
+	tv.selectTab(next, true)
+	return true
+}
+
 func (tv *UITabView) selectTab(index int, notify bool) {
 	if index < 0 || index >= len(tv.tabs) {
 		return
