@@ -172,3 +172,57 @@ func TestUITabViewRemovalSelectsNearestTabAndNotifies(t *testing.T) {
 		t.Fatalf("empty tab view state is invalid: active=%d count=%d", tv.ActiveIndex(), tv.Count())
 	}
 }
+
+func TestUITabViewCloseRequestUsesCurrentStableTabIndex(t *testing.T) {
+	tv := tabview.NewUITabView(nil)
+	tv.SetAutomationID("sessions")
+	tv.AddTabWithID("one", "One", nil)
+	tv.AddTabWithID("two", "Two", nil)
+	tv.SetTabsClosable(true)
+
+	var requested []int
+	tv.OnTabCloseRequested(func(index int) { requested = append(requested, index) })
+	if err := view.AutomationClick("sessions.tab.two.close"); err != nil {
+		t.Fatalf("close automation failed: %v", err)
+	}
+	if len(requested) != 1 || requested[0] != 1 {
+		t.Fatalf("close requests = %#v, want [1]", requested)
+	}
+	if tv.Count() != 2 {
+		t.Fatal("close request must not remove a tab before the owner accepts it")
+	}
+
+	if !tv.RemoveTab(0) {
+		t.Fatal("failed to remove preceding tab")
+	}
+	if err := view.AutomationClick("sessions.tab.two.close"); err != nil {
+		t.Fatalf("close automation after reindex failed: %v", err)
+	}
+	if len(requested) != 2 || requested[1] != 0 {
+		t.Fatalf("reindexed close requests = %#v, want [1 0]", requested)
+	}
+}
+
+func TestUITabViewCloseAffordanceVisibilityAndLifecycle(t *testing.T) {
+	tv := tabview.NewUITabView(nil)
+	tv.SetAutomationID("sessions")
+	tv.AddTabWithID("local", "Local", nil)
+
+	if err := view.AutomationClick("sessions.tab.local.close"); err != view.ErrAutomationNodeUnavailable {
+		t.Fatalf("hidden close action error = %v, want unavailable", err)
+	}
+	tv.SetTabsClosable(true)
+	if node, ok := view.AutomationLookup("sessions.tab.local.close"); !ok || node.AutomationName() != "Close Local" {
+		t.Fatalf("close affordance semantic state missing: ok=%t node=%#v", ok, node)
+	}
+	tv.SetTabTitle(0, "Local · running")
+	if node, _ := view.AutomationLookup("sessions.tab.local.close"); node.AutomationName() != "Close Local · running" {
+		t.Fatalf("close affordance title was stale: %q", node.AutomationName())
+	}
+	if !tv.RemoveTab(0) {
+		t.Fatal("RemoveTab failed")
+	}
+	if _, ok := view.AutomationLookup("sessions.tab.local.close"); ok {
+		t.Fatal("removed close affordance remained in automation registry")
+	}
+}

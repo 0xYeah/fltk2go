@@ -14,6 +14,7 @@ import (
 const (
 	defaultTabBarHeight = 40
 	indicatorHeight     = 3
+	closeButtonWidth    = 28
 )
 
 var automationSegmentUnsafe = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
@@ -43,14 +44,17 @@ type UITabView struct {
 	automationID string
 	style        Style
 
-	onTabChanged func(index int)
+	onTabChanged        func(index int)
+	onTabCloseRequested func(index int)
+	tabsClosable        bool
 }
 
 type tabItem struct {
-	id      string
-	title   string
-	btn     *button.UIButton
-	content view.Viewable
+	id       string
+	title    string
+	btn      *button.UIButton
+	closeBtn *button.UIButton
+	content  view.Viewable
 }
 
 func defaultStyle() Style {
@@ -148,6 +152,8 @@ func (tv *UITabView) SetStyle(style Style) {
 	for _, item := range tv.tabs {
 		item.btn.SetBackgroundColor(style.BarBackground)
 		item.btn.Raw().SetLabelSize(style.FontSize)
+		item.closeBtn.SetBackgroundColor(style.BarBackground)
+		item.closeBtn.Raw().SetLabelSize(style.FontSize + 2)
 	}
 	tv.updateSelectionStyles()
 	tv.raw.Redraw()
@@ -199,6 +205,20 @@ func (tv *UITabView) AddTabWithID(id, title string, content view.Viewable) int {
 	})
 	tv.tabBar.Add(btn.Raw())
 	tv.v.AddAutomationChild(btn)
+	closeBtn := button.NewUIButton(&foundation.Rect{Width: closeButtonWidth, Height: defaultTabBarHeight}, "×")
+	item.closeBtn = closeBtn
+	closeBtn.Raw().SetBox(fltk_bridge.FLAT_BOX)
+	closeBtn.Raw().SetLabelSize(tv.style.FontSize + 2)
+	closeBtn.SetBackgroundColor(tv.style.BarBackground)
+	closeBtn.Raw().SetTooltip("Close " + title)
+	closeBtn.Raw().Hide()
+	closeBtn.OnTouchUpInside(func() {
+		if index := tv.indexOfItem(item); index >= 0 && tv.onTabCloseRequested != nil {
+			tv.onTabCloseRequested(index)
+		}
+	})
+	tv.tabBar.Add(closeBtn.Raw())
+	tv.v.AddAutomationChild(closeBtn)
 
 	if content != nil && content.View() != nil && content.View().Raw() != nil {
 		if rw, ok := content.View().Raw().(interface {
@@ -280,6 +300,10 @@ func (tv *UITabView) SetTabTitle(index int, title string) bool {
 	item := tv.tabs[index]
 	item.title = title
 	item.btn.SetTitle(title)
+	if item.closeBtn != nil {
+		item.closeBtn.View().SetAutomationName("Close " + title)
+		item.closeBtn.Raw().SetTooltip("Close " + title)
+	}
 	tv.updateAutomation()
 	return true
 }
@@ -297,6 +321,12 @@ func (tv *UITabView) RemoveTab(index int) bool {
 		tv.v.RemoveAutomationChild(item.btn)
 		item.btn.View().SetAutomationID("")
 		item.btn.View().BindHost(nil)
+	}
+	if item.closeBtn != nil {
+		tv.tabBar.Remove(item.closeBtn.Raw())
+		tv.v.RemoveAutomationChild(item.closeBtn)
+		item.closeBtn.View().SetAutomationID("")
+		item.closeBtn.View().BindHost(nil)
 	}
 	if item.content != nil && item.content.View() != nil && item.content.View().Raw() != nil {
 		tv.contentArea.Remove(item.content.View().Raw())
@@ -335,7 +365,19 @@ func (tv *UITabView) relayoutTabs() {
 		if i == count-1 {
 			width = tv.tabBar.X() + tv.tabBar.W() - x
 		}
-		item.btn.Raw().Resize(x, tv.tabBar.Y(), width, tv.tabBar.H()-indicatorHeight)
+		labelWidth := width
+		if tv.tabsClosable {
+			closeWidth := closeButtonWidth
+			if closeWidth > width/2 {
+				closeWidth = width / 2
+			}
+			labelWidth -= closeWidth
+			item.closeBtn.Raw().Resize(x+labelWidth, tv.tabBar.Y(), closeWidth, tv.tabBar.H()-indicatorHeight)
+			item.closeBtn.Raw().Show()
+		} else {
+			item.closeBtn.Raw().Hide()
+		}
+		item.btn.Raw().Resize(x, tv.tabBar.Y(), labelWidth, tv.tabBar.H()-indicatorHeight)
 		x += width
 	}
 	tv.tabBar.Remove(tv.highlight)
@@ -433,6 +475,11 @@ func (tv *UITabView) updateAutomation() {
 			id = tv.automationID + ".tab." + item.id
 		}
 		item.btn.View().SetAutomationID(id).SetAutomationName(item.title).SetAutomationProperty("index", fmt.Sprintf("%d", i))
+		closeID := ""
+		if id != "" {
+			closeID = id + ".close"
+		}
+		item.closeBtn.View().SetAutomationID(closeID).SetAutomationName("Close "+item.title).SetAutomationProperty("tabID", item.id)
 	}
 	tv.updateSelectionStyles()
 }
@@ -440,5 +487,26 @@ func (tv *UITabView) updateAutomation() {
 func (tv *UITabView) OnTabChanged(cb func(index int)) {
 	if tv != nil {
 		tv.onTabChanged = cb
+	}
+}
+
+// SetTabsClosable shows or hides a native close affordance on every tab. A
+// close click only requests closure; the owner remains responsible for applying
+// running-session, unsaved-draft, or other domain-specific veto policies.
+func (tv *UITabView) SetTabsClosable(closable bool) {
+	if tv == nil || tv.tabsClosable == closable {
+		return
+	}
+	tv.tabsClosable = closable
+	tv.relayoutTabs()
+	tv.raw.Redraw()
+}
+
+// OnTabCloseRequested receives the tab's current index when its close
+// affordance is activated. The index is resolved at click time after removals,
+// so callbacks never retain stale positional identity.
+func (tv *UITabView) OnTabCloseRequested(cb func(index int)) {
+	if tv != nil {
+		tv.onTabCloseRequested = cb
 	}
 }
