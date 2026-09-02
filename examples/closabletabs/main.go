@@ -19,7 +19,7 @@ func main() {
 	title.SetFontSize(22)
 	root.AddSubview(title)
 
-	status := uikit.NewUILabel(&foundation.Rect{X: 32, Y: 66, Width: 696, Height: 28}, "Close a tab with ×; the owner decides whether to accept the request.")
+	status := uikit.NewUILabel(&foundation.Rect{X: 32, Y: 66, Width: 392, Height: 28}, "Select a tab, then reorder or close it.")
 	status.SetFrame(fltk_bridge.FLAT_BOX)
 	status.SetBackgroundColor(uint(fltk_bridge.BACKGROUND_COLOR))
 	status.View().SetAutomationID("closable-tabs.status")
@@ -42,6 +42,26 @@ func main() {
 		}
 	})
 	root.AddSubview(tabs)
+
+	moveLeft := uikit.NewUIButton(&foundation.Rect{X: 440, Y: 64, Width: 136, Height: 32}, "Move left")
+	moveLeft.View().SetAutomationID("closable-tabs.move-left")
+	moveLeft.OnTouchUpInside(func() {
+		from := tabs.ActiveIndex()
+		if tabs.MoveTab(from, from-1) {
+			status.SetText(fmt.Sprintf("Moved %s left", tabs.TabID(tabs.ActiveIndex())))
+		}
+	})
+	root.AddSubview(moveLeft)
+
+	moveRight := uikit.NewUIButton(&foundation.Rect{X: 592, Y: 64, Width: 136, Height: 32}, "Move right")
+	moveRight.View().SetAutomationID("closable-tabs.move-right")
+	moveRight.OnTouchUpInside(func() {
+		from := tabs.ActiveIndex()
+		if tabs.MoveTab(from, from+1) {
+			status.SetText(fmt.Sprintf("Moved %s right", tabs.TabID(tabs.ActiveIndex())))
+		}
+	})
+	root.AddSubview(moveRight)
 
 	win.Show()
 	fltk2go.Run()

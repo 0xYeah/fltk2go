@@ -293,6 +293,33 @@ func (tv *UITabView) IndexOfID(id string) int {
 	return -1
 }
 
+// MoveTab reorders a tab while preserving the active tab's stable identity,
+// content ownership, close behavior, and automation IDs. Reordering does not
+// emit OnTabChanged because the selected tab itself does not change.
+func (tv *UITabView) MoveTab(from, to int) bool {
+	if tv == nil || from < 0 || from >= len(tv.tabs) || to < 0 || to >= len(tv.tabs) || from == to {
+		return false
+	}
+	active := (*tabItem)(nil)
+	if tv.activeIndex >= 0 && tv.activeIndex < len(tv.tabs) {
+		active = tv.tabs[tv.activeIndex]
+	}
+	item := tv.tabs[from]
+	if from < to {
+		copy(tv.tabs[from:to], tv.tabs[from+1:to+1])
+	} else {
+		copy(tv.tabs[to+1:from+1], tv.tabs[to:from])
+	}
+	tv.tabs[to] = item
+	if active != nil {
+		tv.activeIndex = tv.indexOfItem(active)
+	}
+	tv.relayoutTabs()
+	tv.updateAutomation()
+	tv.raw.Redraw()
+	return true
+}
+
 func (tv *UITabView) SetTabTitle(index int, title string) bool {
 	if tv == nil || index < 0 || index >= len(tv.tabs) {
 		return false

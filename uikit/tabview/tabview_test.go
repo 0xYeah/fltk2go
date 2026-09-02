@@ -114,6 +114,52 @@ func TestUITabViewSelectAdjacentRequiresMultipleTabs(t *testing.T) {
 	}
 }
 
+func TestUITabViewMoveTabPreservesActiveIdentityAndAutomationOrder(t *testing.T) {
+	tv := tabview.NewUITabView(nil)
+	tv.SetAutomationID("sessions")
+	tv.AddTabWithID("one", "One", nil)
+	tv.AddTabWithID("two", "Two", nil)
+	tv.AddTabWithID("three", "Three", nil)
+	tv.SelectTab(1)
+
+	changed := 0
+	tv.OnTabChanged(func(int) { changed++ })
+	if !tv.MoveTab(1, 0) {
+		t.Fatal("MoveTab(1, 0) failed")
+	}
+	if got := []string{tv.TabID(0), tv.TabID(1), tv.TabID(2)}; got[0] != "two" || got[1] != "one" || got[2] != "three" {
+		t.Fatalf("tab order after move = %#v", got)
+	}
+	if tv.ActiveIndex() != 0 || tv.TabID(tv.ActiveIndex()) != "two" {
+		t.Fatalf("active identity drifted: index=%d id=%q", tv.ActiveIndex(), tv.TabID(tv.ActiveIndex()))
+	}
+	if changed != 0 {
+		t.Fatalf("reordering active identity emitted %d selection callbacks", changed)
+	}
+	if node, ok := view.AutomationLookup("sessions.tab.two"); !ok || node.AutomationSnapshot().Properties["index"] != "0" {
+		t.Fatalf("moved tab automation index is stale: ok=%t node=%#v", ok, node)
+	}
+	if node, ok := view.AutomationLookup("sessions.tab.one"); !ok || node.AutomationSnapshot().Properties["index"] != "1" {
+		t.Fatalf("displaced tab automation index is stale: ok=%t node=%#v", ok, node)
+	}
+}
+
+func TestUITabViewMoveTabRejectsInvalidOrNoopMoves(t *testing.T) {
+	var nilTabs *tabview.UITabView
+	if nilTabs.MoveTab(0, 1) {
+		t.Fatal("nil tab view accepted a move")
+	}
+	tv := tabview.NewUITabView(nil)
+	tv.AddTabWithID("one", "One", nil)
+	tv.AddTabWithID("two", "Two", nil)
+	if tv.MoveTab(-1, 0) || tv.MoveTab(0, 2) || tv.MoveTab(0, 0) {
+		t.Fatal("invalid or no-op move was accepted")
+	}
+	if tv.TabID(0) != "one" || tv.TabID(1) != "two" || tv.ActiveIndex() != 0 {
+		t.Fatal("rejected move changed tab state")
+	}
+}
+
 func TestUITabViewStableIDsAndDynamicRemoval(t *testing.T) {
 	tv := tabview.NewUITabView(nil)
 	tv.SetAutomationID("sessions")
