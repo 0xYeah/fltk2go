@@ -14,7 +14,20 @@ type Input struct {
 	v view.UIView
 
 	onChange func()
+
+	onNavigation func(NavigationAction) bool
 }
+
+// NavigationAction identifies list-navigation commands commonly owned by a
+// search or launcher input. Ordinary editing keys remain with the native input.
+type NavigationAction int
+
+const (
+	NavigationSubmit NavigationAction = iota + 1
+	NavigationNext
+	NavigationPrevious
+	NavigationCancel
+)
 
 // InputType 输入框类型
 type InputType int
@@ -197,6 +210,39 @@ func (in *Input) OnChange(callback func()) {
 			widget.SetCallback(callback)
 		}
 	}
+}
+
+// OnNavigation routes Enter, Down, Up and Escape through one native-input
+// callback. Return true when the owner handled the command, or false to let the
+// underlying input retain its normal behavior.
+func (in *Input) OnNavigation(callback func(NavigationAction) bool) {
+	if in == nil {
+		return
+	}
+	in.onNavigation = callback
+	in.v.On(fltk_bridge.KEYDOWN, func(fltk_bridge.Event) bool {
+		return in.dispatchNavigation(fltk_bridge.EventKey())
+	})
+}
+
+func (in *Input) dispatchNavigation(key int) bool {
+	if in == nil || in.onNavigation == nil {
+		return false
+	}
+	var action NavigationAction
+	switch key {
+	case fltk_bridge.ENTER_KEY:
+		action = NavigationSubmit
+	case fltk_bridge.DOWN:
+		action = NavigationNext
+	case fltk_bridge.UP:
+		action = NavigationPrevious
+	case fltk_bridge.ESCAPE:
+		action = NavigationCancel
+	default:
+		return false
+	}
+	return in.onNavigation(action)
 }
 
 // View 返回基础视图，实现view.Viewable接口

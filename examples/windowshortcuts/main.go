@@ -18,7 +18,7 @@ func main() {
 	title.SetFontSize(22)
 	root.AddSubview(title)
 
-	hint := uikit.NewUILabel(&foundation.Rect{X: 36, Y: 78, Width: 648, Height: 28}, "Focus the terminal, then press Ctrl+K to search without PTY input")
+	hint := uikit.NewUILabel(&foundation.Rect{X: 36, Y: 78, Width: 648, Height: 28}, "Ctrl+K focuses search; Up/Down, Enter and Escape stay native and deterministic")
 	root.AddSubview(hint)
 
 	search := uikit.NewInput(36, 124, 648, 38, "")
@@ -30,6 +30,31 @@ func main() {
 	status.SetBackgroundColor(uint(fltk_bridge.BACKGROUND_COLOR))
 	status.View().SetAutomationID("shortcut.status")
 	root.AddSubview(status)
+	results := []string{"Production SSH", "Staging SSH", "Local Shell"}
+	selected := 0
+	search.OnNavigation(func(action uikit.InputNavigationAction) bool {
+		switch action {
+		case uikit.InputNavigationNext:
+			if selected < len(results)-1 {
+				selected++
+			}
+			status.SetText("Selected: " + results[selected])
+		case uikit.InputNavigationPrevious:
+			if selected > 0 {
+				selected--
+			}
+			status.SetText("Selected: " + results[selected])
+		case uikit.InputNavigationSubmit:
+			status.SetText("Launched: " + results[selected])
+		case uikit.InputNavigationCancel:
+			if search.Text() == "" {
+				return false
+			}
+			search.SetText("")
+			status.SetText("Search cleared")
+		}
+		return true
+	})
 
 	terminal := uikit.NewUITerminalView(&foundation.Rect{X: 36, Y: 220, Width: 648, Height: 164})
 	terminal.SetAutomationID("shortcut.terminal")

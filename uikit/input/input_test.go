@@ -67,3 +67,52 @@ func TestAutomationSetTextPublishesNativeChangeCallback(t *testing.T) {
 		t.Fatalf("text/change count = %q/%d, want 日本語 SSH/1", in.Text(), changes)
 	}
 }
+
+func TestInputNavigationMapsNativeSearchKeys(t *testing.T) {
+	in := New(0, 0, 120, 24, "Search")
+	var actions []NavigationAction
+	in.OnNavigation(func(action NavigationAction) bool {
+		actions = append(actions, action)
+		return action != NavigationCancel
+	})
+
+	tests := []struct {
+		key     int
+		want    NavigationAction
+		handled bool
+	}{
+		{key: fltk_bridge.ENTER_KEY, want: NavigationSubmit, handled: true},
+		{key: fltk_bridge.DOWN, want: NavigationNext, handled: true},
+		{key: fltk_bridge.UP, want: NavigationPrevious, handled: true},
+		{key: fltk_bridge.ESCAPE, want: NavigationCancel, handled: false},
+	}
+	for _, test := range tests {
+		if got := in.dispatchNavigation(test.key); got != test.handled {
+			t.Fatalf("dispatchNavigation(%d) = %v, want %v", test.key, got, test.handled)
+		}
+	}
+	if len(actions) != len(tests) {
+		t.Fatalf("navigation actions = %v, want %d actions", actions, len(tests))
+	}
+	for index, test := range tests {
+		if actions[index] != test.want {
+			t.Fatalf("action %d = %v, want %v", index, actions[index], test.want)
+		}
+	}
+}
+
+func TestInputNavigationLeavesTextEditingKeysNative(t *testing.T) {
+	in := New(0, 0, 120, 24, "Search")
+	calls := 0
+	in.OnNavigation(func(NavigationAction) bool {
+		calls++
+		return true
+	})
+
+	if in.dispatchNavigation('x') {
+		t.Fatal("ordinary text key must remain available to native input")
+	}
+	if calls != 0 {
+		t.Fatalf("ordinary key invoked navigation callback %d times", calls)
+	}
+}

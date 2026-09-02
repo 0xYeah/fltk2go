@@ -33,6 +33,7 @@ type UIButton = button.UIButton
 type ButtonType = button.ButtonType
 type Input = input.Input
 type InputType = input.InputType
+type InputNavigationAction = input.NavigationAction
 type UITableView = tableview.TableView
 type UITableViewCell = tableview.TableViewCell
 type TableViewDataSource = tableview.DataSource
@@ -71,6 +72,11 @@ const (
 	IntInput    = input.IntInput
 	FloatInput  = input.FloatInput
 	SecretInput = input.SecretInput
+
+	InputNavigationSubmit   = input.NavigationSubmit
+	InputNavigationNext     = input.NavigationNext
+	InputNavigationPrevious = input.NavigationPrevious
+	InputNavigationCancel   = input.NavigationCancel
 
 	AxisVertical   = stackview.AxisVertical
 	AxisHorizontal = stackview.AxisHorizontal
