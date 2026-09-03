@@ -98,6 +98,7 @@ func BuildView(parent *view.UIView) view.Viewable {
 	systemBtn := button.NewUIButton(&foundation.Rect{X: 88, Y: 214, Width: 150, Height: 44}, "Primary")
 	systemBtn.SetBackgroundColor(Primary)
 	systemBtn.SetTitleColor(White)
+	systemBtn.View().SetTooltip("Run the primary action")
 	parent.AddSubview(systemBtn)
 
 	checkBtn := button.NewUIButtonWithType(&foundation.Rect{X: 264, Y: 214, Width: 150, Height: 44}, "Checkbox", button.CheckboxButton)
@@ -156,14 +157,17 @@ func BuildView(parent *view.UIView) view.Viewable {
 	addBtn := button.NewUIButton(&foundation.Rect{X: 56, Y: 670, Width: 150, Height: 44}, "Add item")
 	addBtn.SetBackgroundColor(Green)
 	addBtn.SetTitleColor(White)
+	addBtn.View().SetTooltip("Add a new table row")
 
 	removeBtn := button.NewUIButton(&foundation.Rect{X: 226, Y: 670, Width: 150, Height: 44}, "Remove")
 	removeBtn.SetBackgroundColor(Red)
 	removeBtn.SetTitleColor(White)
+	removeBtn.View().SetTooltip("Remove the selected table row")
 
 	refreshBtn := button.NewUIButton(&foundation.Rect{X: 396, Y: 670, Width: 150, Height: 44}, "Refresh")
 	refreshBtn.SetBackgroundColor(ButtonMuted)
 	refreshBtn.SetTitleColor(White)
+	refreshBtn.View().SetTooltip("Reload the table contents")
 
 	addBtn.OnTouchUpInside(func() {
 		newItem := Item{

@@ -66,6 +66,7 @@ extern "C" {
   extern int go_fltk_Widget_labelsize(Fl_Widget *w);
   extern int go_fltk_Widget_labeltype(Fl_Widget *w);
   extern void go_fltk_Widget_set_tooltip(Fl_Widget* w, const char* tooltip);
+  extern const char* go_fltk_Widget_tooltip(Fl_Widget* w);
   extern Fl_Group *go_fltk_Widget_parent(Fl_Widget *w);
   extern int go_fltk_Widget_set_window_cursor(Fl_Widget *w, int cursor);
   extern int go_fltk_Widget_take_focus(Fl_Widget *w);

@@ -61,6 +61,7 @@ var examples = []example{
 <b>演示要点：</b>
 <ul>
 <li>SystemButton / CheckboxButton / RadioButton / ToggleButton</li>
+<li>UIView.SetTooltip native hover help and automation metadata</li>
 <li>TableView DataSource / Delegate 模式</li>
 <li>动态添加 / 删除行，ReloadData</li>
 <li>SetCustomDraw 自定义行绘制</li>
@@ -201,6 +202,8 @@ var examples = []example{
 
 func main() {
 	runtime.LockOSThread()
+	fltk_bridge.EnableTooltips()
+	fltk_bridge.SetTooltipDelay(0.4)
 
 	win := fltk_bridge.NewWindow(winW, winH, "FLTK2Go — Examples Launcher")
 

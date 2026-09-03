@@ -103,6 +103,23 @@ func (v *UIView) Raw() fltk_bridge.Widget {
 	return v.raw
 }
 
+// SetTooltip sets native hover help for any UIKit view and mirrors the text
+// into semantic automation metadata. Passing an empty string clears both.
+func (v *UIView) SetTooltip(text string) *UIView {
+	if v == nil || v.raw == nil {
+		return v
+	}
+	if tooltip, ok := v.raw.(interface{ SetTooltip(string) }); ok {
+		tooltip.SetTooltip(text)
+	}
+	if text == "" {
+		delete(v.automation.props, "tooltip")
+		return v
+	}
+	v.SetAutomationProperty("tooltip", text)
+	return v
+}
+
 // Superview returns the container currently hosting this view, if any.
 func (v *UIView) Superview() Container {
 	if v == nil {

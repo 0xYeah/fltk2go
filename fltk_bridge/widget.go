@@ -236,6 +236,9 @@ func (w *widget) SetTooltip(text string) {
 	defer C.free(unsafe.Pointer(tooltipStr))
 	C.go_fltk_Widget_set_tooltip(w.ptr(), tooltipStr)
 }
+func (w *widget) Tooltip() string {
+	return C.GoString(C.go_fltk_Widget_tooltip(w.ptr()))
+}
 func (w *widget) Parent() *Group {
 	group := &Group{}
 	initUnownedWidget(group, unsafe.Pointer(C.go_fltk_Widget_parent(w.ptr())))
