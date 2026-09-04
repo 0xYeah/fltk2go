@@ -186,6 +186,20 @@ func (t *UITerminalView) CopySelection() bool {
 	return true
 }
 
+// CopyAllText copies the terminal's complete rendered text, including
+// scrollback. It returns false when the terminal has no text to copy.
+func (t *UITerminalView) CopyAllText() bool {
+	if t == nil || t.raw == nil {
+		return false
+	}
+	text := t.raw.Text()
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	fltk_bridge.CopyToClipboard(text)
+	return true
+}
+
 // PasteClipboard requests the system clipboard and delivers it through the
 // same OnInput path used by the native Ctrl+Shift+V and Shift+Insert actions.
 func (t *UITerminalView) PasteClipboard() {

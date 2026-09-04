@@ -173,4 +173,15 @@ func TestTerminalClipboardCommandsAreSafeWithoutSelection(t *testing.T) {
 	if terminal.CopySelection() {
 		t.Fatal("copy without a selection must report no action")
 	}
+	if terminal.CopyAllText() {
+		t.Fatal("copy-all without terminal text must report no action")
+	}
+}
+
+func TestTerminalCopyAllTextCopiesCompleteRenderedOutput(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	terminal.Append("first line\r\nsecond line")
+	if !terminal.CopyAllText() {
+		t.Fatal("copy-all with terminal text must report success")
+	}
 }

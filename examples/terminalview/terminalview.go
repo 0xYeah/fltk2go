@@ -20,7 +20,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	title.SetFontSize(22)
 	parent.AddSubview(title)
 
-	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Paste · Shift+PageUp/PageDown scrolls · Shift+Home/End jumps")
+	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Copy All/Paste · Shift+PageUp/PageDown scrolls · Shift+Home/End jumps")
 	parent.AddSubview(hint)
 
 	terminal := uikit.NewUITerminalView(&foundation.Rect{X: 24, Y: 80, Width: 852, Height: 450})
@@ -45,6 +45,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 		}
 		contextMenu.SetMenu([]uikit.MenuItem{
 			{Title: "Copy	Ctrl+Shift+C", Flags: copyFlags, Callback: func() { terminal.CopySelection() }},
+			{Title: "Copy All Output", Callback: func() { terminal.CopyAllText() }},
 			{Title: "Paste	Ctrl+Shift+V", Callback: terminal.PasteClipboard},
 		})
 		contextMenu.Popup()
