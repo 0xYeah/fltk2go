@@ -22,6 +22,13 @@ type KeyEvent struct {
 	State int
 }
 
+// ContextMenuState describes terminal state at the exact right-click that
+// requests an application-owned context menu. Applications can use it to
+// disable Copy without reaching through to the native FLTK widget.
+type ContextMenuState struct {
+	HasSelection bool
+}
+
 type terminalClipboardAction uint8
 
 const (
@@ -74,14 +81,15 @@ func scrollActionForKey(event KeyEvent) terminalScrollAction {
 // terminal parsing, scrollback, selection, focus, and key-sequence translation;
 // it intentionally does not own a process or network connection.
 type UITerminalView struct {
-	v          view.UIView
-	raw        *fltk_bridge.Terminal
-	onInput    func([]byte)
-	onResize   func(Size)
-	lastSize   Size
-	inputBound bool
-	shortcuts  []terminalShortcut
-	stream     terminalStreamFilter
+	v             view.UIView
+	raw           *fltk_bridge.Terminal
+	onInput       func([]byte)
+	onResize      func(Size)
+	lastSize      Size
+	inputBound    bool
+	shortcuts     []terminalShortcut
+	onContextMenu func(ContextMenuState)
+	stream        terminalStreamFilter
 }
 
 type terminalShortcut struct {
@@ -105,6 +113,9 @@ func NewUITerminalView(r *foundation.Rect) *UITerminalView {
 	t.v.SetAutomationValueHandler(func() (string, bool) { return t.Text(), true })
 	t.v.On(fltk_bridge.PUSH, func(fltk_bridge.Event) bool {
 		raw.TakeFocus()
+		if t.dispatchContextMenu(fltk_bridge.EventButton()) {
+			return true
+		}
 		return false // preserve Fl_Terminal mouse selection handling
 	})
 	raw.SetResizeHandler(func() {
@@ -152,6 +163,34 @@ func (t *UITerminalView) Clear() {
 func (t *UITerminalView) ClearHistory() {
 	if t != nil && t.raw != nil {
 		t.raw.ClearHistory()
+	}
+}
+
+// HasSelection reports whether the native terminal currently has selected
+// text. It does not expose the complete scrollback buffer.
+func (t *UITerminalView) HasSelection() bool {
+	return t != nil && t.raw != nil && t.raw.SelectedText() != ""
+}
+
+// CopySelection copies only the current native terminal selection. It returns
+// false when there is no selection, allowing menu actions to remain no-ops.
+func (t *UITerminalView) CopySelection() bool {
+	if t == nil || t.raw == nil {
+		return false
+	}
+	selected := t.raw.SelectedText()
+	if selected == "" {
+		return false
+	}
+	fltk_bridge.CopyToClipboard(selected)
+	return true
+}
+
+// PasteClipboard requests the system clipboard and delivers it through the
+// same OnInput path used by the native Ctrl+Shift+V and Shift+Insert actions.
+func (t *UITerminalView) PasteClipboard() {
+	if t != nil && t.raw != nil {
+		t.raw.PasteClipboard()
 	}
 }
 
@@ -267,6 +306,22 @@ func (t *UITerminalView) OnShortcut(shortcut int, handler func()) {
 	t.shortcuts = append(t.shortcuts, terminalShortcut{shortcut: shortcut, handler: handler})
 }
 
+// OnContextMenu registers an application-owned menu request. Right-click is
+// consumed only when a handler exists; ordinary mouse selection remains native.
+func (t *UITerminalView) OnContextMenu(handler func(ContextMenuState)) {
+	if t != nil {
+		t.onContextMenu = handler
+	}
+}
+
+func (t *UITerminalView) dispatchContextMenu(button fltk_bridge.MouseButton) bool {
+	if t == nil || t.onContextMenu == nil || button != fltk_bridge.RightMouse {
+		return false
+	}
+	t.onContextMenu(ContextMenuState{HasSelection: t.HasSelection()})
+	return true
+}
+
 func (t *UITerminalView) dispatchShortcut(matches func(int) bool) bool {
 	if t == nil || matches == nil {
 		return false
@@ -299,12 +354,10 @@ func (t *UITerminalView) OnInput(handler func([]byte)) {
 		}
 		switch clipboardActionForKey(event) {
 		case terminalClipboardCopy:
-			if selected := t.raw.SelectedText(); selected != "" {
-				fltk_bridge.CopyToClipboard(selected)
-			}
+			t.CopySelection()
 			return true
 		case terminalClipboardPaste:
-			t.raw.PasteClipboard()
+			t.PasteClipboard()
 			return true
 		}
 		switch scrollActionForKey(event) {

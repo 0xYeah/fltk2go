@@ -144,3 +144,33 @@ func TestTerminalShortcutCommandsRunBeforePTYInput(t *testing.T) {
 		t.Fatal("unmatched key must remain available to terminal input")
 	}
 }
+
+func TestTerminalContextMenuOnlyConsumesRightMousePush(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	invocations := 0
+	var state ContextMenuState
+	terminal.OnContextMenu(func(got ContextMenuState) {
+		invocations++
+		state = got
+	})
+
+	if terminal.dispatchContextMenu(fltk_bridge.LeftMouse) {
+		t.Fatal("left mouse push must remain available to native terminal selection")
+	}
+	if !terminal.dispatchContextMenu(fltk_bridge.RightMouse) {
+		t.Fatal("right mouse push did not open the terminal context menu")
+	}
+	if invocations != 1 || state.HasSelection {
+		t.Fatalf("context menu state = invocations:%d selection:%t, want 1/false", invocations, state.HasSelection)
+	}
+}
+
+func TestTerminalClipboardCommandsAreSafeWithoutSelection(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	if terminal.HasSelection() {
+		t.Fatal("new terminal unexpectedly has a selection")
+	}
+	if terminal.CopySelection() {
+		t.Fatal("copy without a selection must report no action")
+	}
+}

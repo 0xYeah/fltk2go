@@ -26,17 +26,18 @@ func (m *menu) onDelete() {
 		globalCallbackMap.unregister(m.deletionHandlerId)
 	}
 	m.deletionHandlerId = 0
-	for _, itemCallbackId := range m.itemCallbacks {
-		globalCallbackMap.unregister(itemCallbackId)
-	}
-	m.itemCallbacks = m.itemCallbacks[:0]
+	m.releaseItemCallbacks()
 }
 func (m *menu) Destroy() {
+	m.releaseItemCallbacks()
+	m.widget.Destroy()
+}
+
+func (m *menu) releaseItemCallbacks() {
 	for _, itemCallbackId := range m.itemCallbacks {
 		globalCallbackMap.unregister(itemCallbackId)
 	}
 	m.itemCallbacks = m.itemCallbacks[:0]
-	m.widget.Destroy()
 }
 
 // Add adds a new menu item with the given label that when chosen will execute
@@ -90,6 +91,7 @@ func (m *menu) Remove(index int) {
 
 // Clear removes all the menu's items.
 func (m *menu) Clear() {
+	m.releaseItemCallbacks()
 	C.go_fltk_Menu_clear((*C.Fl_Menu_)(m.ptr()))
 }
 

@@ -3,6 +3,7 @@ package terminalview
 import (
 	"fmt"
 
+	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/foundation"
 	"github.com/0xdevelop/fltk2go/uikit"
 	"github.com/0xdevelop/fltk2go/uikit/button"
@@ -19,7 +20,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	title.SetFontSize(22)
 	parent.AddSubview(title)
 
-	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Shift+PageUp/PageDown scrolls · Shift+Home/End jumps to history/live output")
+	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Paste · Shift+PageUp/PageDown scrolls · Shift+Home/End jumps")
 	parent.AddSubview(hint)
 
 	terminal := uikit.NewUITerminalView(&foundation.Rect{X: 24, Y: 80, Width: 852, Height: 450})
@@ -35,6 +36,19 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	parent.AddSubview(status)
 	terminal.OnInput(func(data []byte) { status.SetText(fmt.Sprintf("PTY input: %q", data)) })
 	updateStatus := func() { status.SetText(fmt.Sprintf("History offset: %d rows", terminal.ScrollOffset())) }
+	contextMenu := uikit.NewUIContextMenu(&foundation.Rect{})
+	parent.AddSubview(contextMenu)
+	terminal.OnContextMenu(func(state uikit.ContextMenuState) {
+		copyFlags := 0
+		if !state.HasSelection {
+			copyFlags = fltk_bridge.MENU_INACTIVE
+		}
+		contextMenu.SetMenu([]uikit.MenuItem{
+			{Title: "Copy	Ctrl+Shift+C", Flags: copyFlags, Callback: func() { terminal.CopySelection() }},
+			{Title: "Paste	Ctrl+Shift+V", Callback: terminal.PasteClipboard},
+		})
+		contextMenu.Popup()
+	})
 
 	top := button.NewUIButton(&foundation.Rect{X: 430, Y: 544, Width: 130, Height: 36}, "Oldest")
 	top.OnTouchUpInside(func() { terminal.ScrollToTop(); updateStatus() })

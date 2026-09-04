@@ -60,6 +60,7 @@ type StackAxis = stackview.Axis
 type UITextView = textview.UITextView
 type KeyEvent = textview.KeyEvent
 type UITerminalView = terminalview.UITerminalView
+type ContextMenuState = terminalview.ContextMenuState
 type TerminalSize = terminalview.Size
 
 const (
