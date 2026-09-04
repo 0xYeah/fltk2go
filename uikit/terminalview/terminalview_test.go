@@ -185,3 +185,57 @@ func TestTerminalCopyAllTextCopiesCompleteRenderedOutput(t *testing.T) {
 		t.Fatal("copy-all with terminal text must report success")
 	}
 }
+
+func TestSearchTextFindsEveryCaseInsensitiveUnicodeOccurrence(t *testing.T) {
+	matches := SearchText("Alpha needle\n简体 NEEDLE needle\nlast", "NeEdLe")
+	if len(matches) != 3 {
+		t.Fatalf("match count = %d, want 3: %#v", len(matches), matches)
+	}
+	want := []TextMatch{
+		{Line: 0, Column: 6, Length: 6},
+		{Line: 1, Column: 3, Length: 6},
+		{Line: 1, Column: 10, Length: 6},
+	}
+	for i := range want {
+		if matches[i] != want[i] {
+			t.Fatalf("match %d = %#v, want %#v", i, matches[i], want[i])
+		}
+	}
+}
+
+func TestSearchTextTreatsQueryLiterallyAndRejectsBlankInput(t *testing.T) {
+	if got := SearchText("a.b a-b", "."); len(got) != 1 || got[0].Column != 1 {
+		t.Fatalf("literal dot matches = %#v, want one match at column 1", got)
+	}
+	if got := SearchText("text", "  "); got != nil {
+		t.Fatalf("blank query matches = %#v, want nil", got)
+	}
+}
+
+func TestTerminalSearchTextIncludesRetainedOutput(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	terminal.Append("older NEEDLE\r\nnewer needle")
+	if got := terminal.SearchText("needle"); len(got) != 2 {
+		t.Fatalf("terminal match count = %d, want 2: %#v", len(got), got)
+	}
+}
+
+func TestTerminalRevealTextMatchCentersHistoryRow(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	terminal.SetHistoryRows(200)
+	for i := 0; i < 80; i++ {
+		terminal.Append("line\r\n")
+	}
+	matches := SearchText(terminal.Text(), "line")
+	if len(matches) < 40 {
+		t.Fatalf("match count = %d, want retained history", len(matches))
+	}
+	terminal.RevealTextMatch(matches[0])
+	if terminal.ScrollOffset() == 0 {
+		t.Fatal("revealing an old match did not move away from live output")
+	}
+	terminal.RevealTextMatch(matches[len(matches)-1])
+	if terminal.ScrollOffset() != 0 {
+		t.Fatalf("revealing newest match left scroll offset %d, want live bottom", terminal.ScrollOffset())
+	}
+}

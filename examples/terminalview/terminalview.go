@@ -20,7 +20,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	title.SetFontSize(22)
 	parent.AddSubview(title)
 
-	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Copy All/Paste · Shift+PageUp/PageDown scrolls · Shift+Home/End jumps")
+	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Find/Paste · Shift+PageUp/PageDown scrolls · Shift+Home/End jumps")
 	parent.AddSubview(hint)
 
 	terminal := uikit.NewUITerminalView(&foundation.Rect{X: 24, Y: 80, Width: 852, Height: 450})
@@ -32,10 +32,22 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	}
 	terminal.Append("\x1b[32mLIVE OUTPUT — Shift+Home shows row 001, Shift+End returns here\x1b[0m")
 
-	status := label.NewUILabel(&foundation.Rect{X: 24, Y: 548, Width: 360, Height: 32}, "Live output")
+	status := label.NewUILabel(&foundation.Rect{X: 24, Y: 548, Width: 240, Height: 32}, "Live output")
+	status.SetFrame(fltk_bridge.FLAT_BOX)
+	status.SetBackgroundColor(uint(fltk_bridge.BACKGROUND_COLOR))
+	status.View().SetAutomationID("terminal.search-status")
 	parent.AddSubview(status)
 	terminal.OnInput(func(data []byte) { status.SetText(fmt.Sprintf("PTY input: %q", data)) })
 	updateStatus := func() { status.SetText(fmt.Sprintf("History offset: %d rows", terminal.ScrollOffset())) }
+	findOldest := func() {
+		matches := terminal.SearchText("001")
+		if len(matches) == 0 {
+			status.SetText("Row 001 not found")
+			return
+		}
+		terminal.RevealTextMatch(matches[0])
+		status.SetText("Found row 001 in scrollback")
+	}
 	contextMenu := uikit.NewUIContextMenu(&foundation.Rect{})
 	parent.AddSubview(contextMenu)
 	terminal.OnContextMenu(func(state uikit.ContextMenuState) {
@@ -47,10 +59,15 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 			{Title: "Copy	Ctrl+Shift+C", Flags: copyFlags, Callback: func() { terminal.CopySelection() }},
 			{Title: "Copy All Output", Callback: func() { terminal.CopyAllText() }},
 			{Title: "Paste	Ctrl+Shift+V", Callback: terminal.PasteClipboard},
+			{Title: "Find Row 001", Callback: findOldest},
 		})
 		contextMenu.Popup()
 	})
 
+	find := button.NewUIButton(&foundation.Rect{X: 274, Y: 544, Width: 146, Height: 36}, "Find Row 001")
+	find.View().SetAutomationID("terminal.find-oldest")
+	find.OnTouchUpInside(findOldest)
+	parent.AddSubview(find)
 	top := button.NewUIButton(&foundation.Rect{X: 430, Y: 544, Width: 130, Height: 36}, "Oldest")
 	top.OnTouchUpInside(func() { terminal.ScrollToTop(); updateStatus() })
 	parent.AddSubview(top)

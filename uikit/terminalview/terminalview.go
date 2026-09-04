@@ -2,6 +2,7 @@ package terminalview
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/foundation"
@@ -27,6 +28,62 @@ type KeyEvent struct {
 // disable Copy without reaching through to the native FLTK widget.
 type ContextMenuState struct {
 	HasSelection bool
+}
+
+// TextMatch identifies a literal case-insensitive match in the terminal's
+// rendered text. Line, Column, and Length are measured in Unicode code points,
+// so callers can present stable positions without exposing byte offsets.
+type TextMatch struct {
+	Line   int
+	Column int
+	Length int
+}
+
+// SearchText returns every non-overlapping literal match in display order.
+// Matching is Unicode-aware and case-insensitive; a whitespace-only query is
+// treated as empty. Keeping this pure makes search state and navigation an
+// application concern while the reusable terminal owns text/grid semantics.
+func SearchText(text, query string) []TextMatch {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	needle := foldRunes([]rune(query))
+	if len(needle) == 0 {
+		return nil
+	}
+	var matches []TextMatch
+	for lineIndex, line := range strings.Split(text, "\n") {
+		haystack := foldRunes([]rune(strings.TrimSuffix(line, "\r")))
+		for column := 0; column+len(needle) <= len(haystack); {
+			if equalRunes(haystack[column:column+len(needle)], needle) {
+				matches = append(matches, TextMatch{Line: lineIndex, Column: column, Length: len(needle)})
+				column += len(needle)
+				continue
+			}
+			column++
+		}
+	}
+	return matches
+}
+
+func foldRunes(value []rune) []rune {
+	folded := make([]rune, len(value))
+	for i, r := range value {
+		folded[i] = unicode.ToLower(r)
+	}
+	return folded
+}
+
+func equalRunes(left, right []rune) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 type terminalClipboardAction uint8
@@ -152,6 +209,15 @@ func (t *UITerminalView) Text() string {
 		return ""
 	}
 	return t.raw.Text()
+}
+
+// SearchText returns literal case-insensitive matches in the terminal's current
+// retained output, including scrollback.
+func (t *UITerminalView) SearchText(query string) []TextMatch {
+	if t == nil {
+		return nil
+	}
+	return SearchText(t.Text(), query)
 }
 
 func (t *UITerminalView) Clear() {
@@ -282,6 +348,25 @@ func (t *UITerminalView) ScrollToTop() {
 }
 
 func (t *UITerminalView) ScrollToBottom() { t.ScrollToOffset(0) }
+
+// RevealTextMatch scrolls a retained output match near the vertical center of
+// the native viewport. It deliberately does not mutate the user's mouse
+// selection; applications can cycle matches without destroying copied text.
+func (t *UITerminalView) RevealTextMatch(match TextMatch) {
+	if t == nil || t.raw == nil || match.Line < 0 {
+		return
+	}
+	totalLines := len(strings.Split(t.Text(), "\n"))
+	if match.Line >= totalLines {
+		return
+	}
+	rowsBelow := totalLines - 1 - match.Line
+	target := rowsBelow - t.Size().Rows/2
+	if target < 0 {
+		target = 0
+	}
+	t.ScrollToOffset(target)
+}
 
 func (t *UITerminalView) SetMargins(left, top, right, bottom int) {
 	if t != nil && t.raw != nil {
