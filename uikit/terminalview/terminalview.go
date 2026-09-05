@@ -43,6 +43,7 @@ type TextMatch struct {
 // preserves SearchText's Unicode-aware case-insensitive behavior.
 type TextSearchOptions struct {
 	CaseSensitive bool
+	WholeWord     bool
 }
 
 // SearchText returns every non-overlapping literal match in display order.
@@ -72,7 +73,7 @@ func SearchTextWithOptions(text, query string, options TextSearchOptions) []Text
 			if options.CaseSensitive {
 				matched = equalRunes(candidate, needle)
 			}
-			if matched {
+			if matched && (!options.WholeWord || hasWordBoundaries(haystack, column, len(needle))) {
 				matches = append(matches, TextMatch{Line: lineIndex, Column: column, Length: len(needle)})
 				column += len(needle)
 				continue
@@ -81,6 +82,15 @@ func SearchTextWithOptions(text, query string, options TextSearchOptions) []Text
 		}
 	}
 	return matches
+}
+
+func hasWordBoundaries(text []rune, start, length int) bool {
+	return (start == 0 || !isWordRune(text[start-1])) &&
+		(start+length == len(text) || !isWordRune(text[start+length]))
+}
+
+func isWordRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r)
 }
 
 func equalRunes(left, right []rune) bool {

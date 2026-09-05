@@ -234,6 +234,32 @@ func TestSearchTextWithOptionsSupportsCaseSensitiveMatching(t *testing.T) {
 	}
 }
 
+func TestSearchTextWithOptionsSupportsWholeWordMatching(t *testing.T) {
+	matches := SearchTextWithOptions(
+		"cat scatter cat_1 cat-cat 猫 猫咪 猫",
+		"cat",
+		TextSearchOptions{WholeWord: true},
+	)
+	want := []TextMatch{
+		{Line: 0, Column: 0, Length: 3},
+		{Line: 0, Column: 18, Length: 3},
+		{Line: 0, Column: 22, Length: 3},
+	}
+	if len(matches) != len(want) {
+		t.Fatalf("whole-word match count = %d, want %d: %#v", len(matches), len(want), matches)
+	}
+	for i := range want {
+		if matches[i] != want[i] {
+			t.Fatalf("whole-word match %d = %#v, want %#v", i, matches[i], want[i])
+		}
+	}
+
+	cjk := SearchTextWithOptions("猫 猫咪 猫", "猫", TextSearchOptions{WholeWord: true})
+	if len(cjk) != 2 || cjk[0].Column != 0 || cjk[1].Column != 5 {
+		t.Fatalf("Unicode whole-word matches = %#v, want columns 0 and 5", cjk)
+	}
+}
+
 func TestSearchTextTreatsQueryLiterallyAndRejectsBlankInput(t *testing.T) {
 	if got := SearchText("a.b a-b", "."); len(got) != 1 || got[0].Column != 1 {
 		t.Fatalf("literal dot matches = %#v, want one match at column 1", got)
