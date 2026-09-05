@@ -39,11 +39,23 @@ type TextMatch struct {
 	Length int
 }
 
+// TextSearchOptions controls terminal retained-output matching. The zero value
+// preserves SearchText's Unicode-aware case-insensitive behavior.
+type TextSearchOptions struct {
+	CaseSensitive bool
+}
+
 // SearchText returns every non-overlapping literal match in display order.
 // Matching follows Unicode simple case folding and treats a whitespace-only
 // query as empty. Keeping this pure makes search state and navigation an
 // application concern while the reusable terminal owns text/grid semantics.
 func SearchText(text, query string) []TextMatch {
+	return SearchTextWithOptions(text, query, TextSearchOptions{})
+}
+
+// SearchTextWithOptions returns every non-overlapping literal match in display
+// order using the requested case-sensitivity policy.
+func SearchTextWithOptions(text, query string, options TextSearchOptions) []TextMatch {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
@@ -55,7 +67,12 @@ func SearchText(text, query string) []TextMatch {
 	for lineIndex, line := range strings.Split(text, "\n") {
 		haystack := []rune(strings.TrimSuffix(line, "\r"))
 		for column := 0; column+len(needle) <= len(haystack); {
-			if equalFoldRunes(haystack[column:column+len(needle)], needle) {
+			candidate := haystack[column : column+len(needle)]
+			matched := equalFoldRunes(candidate, needle)
+			if options.CaseSensitive {
+				matched = string(candidate) == string(needle)
+			}
+			if matched {
 				matches = append(matches, TextMatch{Line: lineIndex, Column: column, Length: len(needle)})
 				column += len(needle)
 				continue
@@ -225,10 +242,16 @@ func (t *UITerminalView) Text() string {
 // SearchText returns literal case-insensitive matches in the terminal's current
 // retained output, including scrollback.
 func (t *UITerminalView) SearchText(query string) []TextMatch {
+	return t.SearchTextWithOptions(query, TextSearchOptions{})
+}
+
+// SearchTextWithOptions searches the terminal's retained output using the
+// requested case-sensitivity policy.
+func (t *UITerminalView) SearchTextWithOptions(query string, options TextSearchOptions) []TextMatch {
 	if t == nil {
 		return nil
 	}
-	return SearchText(t.Text(), query)
+	return SearchTextWithOptions(t.Text(), query, options)
 }
 
 // ObserveTextChanged registers a lightweight notification for rendered text

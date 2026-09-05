@@ -220,6 +220,20 @@ func TestSearchTextUsesCompleteUnicodeSimpleFolding(t *testing.T) {
 	}
 }
 
+func TestSearchTextWithOptionsSupportsCaseSensitiveMatching(t *testing.T) {
+	matches := SearchTextWithOptions("Needle needle NEEDLE", "Needle", TextSearchOptions{CaseSensitive: true})
+	want := []TextMatch{{Line: 0, Column: 0, Length: 6}}
+	if len(matches) != len(want) || matches[0] != want[0] {
+		t.Fatalf("case-sensitive matches = %#v, want %#v", matches, want)
+	}
+
+	terminal := NewUITerminalView(nil)
+	terminal.Append("Needle needle NEEDLE")
+	if got := terminal.SearchTextWithOptions("needle", TextSearchOptions{CaseSensitive: true}); len(got) != 1 || got[0].Column != 7 {
+		t.Fatalf("terminal case-sensitive matches = %#v, want one match at column 7", got)
+	}
+}
+
 func TestSearchTextTreatsQueryLiterallyAndRejectsBlankInput(t *testing.T) {
 	if got := SearchText("a.b a-b", "."); len(got) != 1 || got[0].Column != 1 {
 		t.Fatalf("literal dot matches = %#v, want one match at column 1", got)

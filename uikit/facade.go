@@ -63,6 +63,7 @@ type UITerminalView = terminalview.UITerminalView
 type ContextMenuState = terminalview.ContextMenuState
 type TerminalSize = terminalview.Size
 type TerminalTextMatch = terminalview.TextMatch
+type TerminalTextSearchOptions = terminalview.TextSearchOptions
 
 const (
 	SystemButton   = button.SystemButton
