@@ -70,7 +70,7 @@ func SearchTextWithOptions(text, query string, options TextSearchOptions) []Text
 			candidate := haystack[column : column+len(needle)]
 			matched := equalFoldRunes(candidate, needle)
 			if options.CaseSensitive {
-				matched = string(candidate) == string(needle)
+				matched = equalRunes(candidate, needle)
 			}
 			if matched {
 				matches = append(matches, TextMatch{Line: lineIndex, Column: column, Length: len(needle)})
@@ -81,6 +81,18 @@ func SearchTextWithOptions(text, query string, options TextSearchOptions) []Text
 		}
 	}
 	return matches
+}
+
+func equalRunes(left, right []rune) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func equalFoldRunes(left, right []rune) bool {
