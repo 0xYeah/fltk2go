@@ -40,22 +40,22 @@ type TextMatch struct {
 }
 
 // SearchText returns every non-overlapping literal match in display order.
-// Matching is Unicode-aware and case-insensitive; a whitespace-only query is
-// treated as empty. Keeping this pure makes search state and navigation an
+// Matching follows Unicode simple case folding and treats a whitespace-only
+// query as empty. Keeping this pure makes search state and navigation an
 // application concern while the reusable terminal owns text/grid semantics.
 func SearchText(text, query string) []TextMatch {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	needle := foldRunes([]rune(query))
+	needle := []rune(query)
 	if len(needle) == 0 {
 		return nil
 	}
 	var matches []TextMatch
 	for lineIndex, line := range strings.Split(text, "\n") {
-		haystack := foldRunes([]rune(strings.TrimSuffix(line, "\r")))
+		haystack := []rune(strings.TrimSuffix(line, "\r"))
 		for column := 0; column+len(needle) <= len(haystack); {
-			if equalRunes(haystack[column:column+len(needle)], needle) {
+			if equalFoldRunes(haystack[column:column+len(needle)], needle) {
 				matches = append(matches, TextMatch{Line: lineIndex, Column: column, Length: len(needle)})
 				column += len(needle)
 				continue
@@ -66,24 +66,28 @@ func SearchText(text, query string) []TextMatch {
 	return matches
 }
 
-func foldRunes(value []rune) []rune {
-	folded := make([]rune, len(value))
-	for i, r := range value {
-		folded[i] = unicode.ToLower(r)
-	}
-	return folded
-}
-
-func equalRunes(left, right []rune) bool {
+func equalFoldRunes(left, right []rune) bool {
 	if len(left) != len(right) {
 		return false
 	}
 	for i := range left {
-		if left[i] != right[i] {
+		if !equalFoldRune(left[i], right[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func equalFoldRune(left, right rune) bool {
+	if left == right {
+		return true
+	}
+	for candidate := unicode.SimpleFold(left); candidate != left; candidate = unicode.SimpleFold(candidate) {
+		if candidate == right {
+			return true
+		}
+	}
+	return false
 }
 
 type terminalClipboardAction uint8

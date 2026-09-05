@@ -203,6 +203,23 @@ func TestSearchTextFindsEveryCaseInsensitiveUnicodeOccurrence(t *testing.T) {
 	}
 }
 
+func TestSearchTextUsesCompleteUnicodeSimpleFolding(t *testing.T) {
+	matches := SearchText("ΟΣ ος οσ", "οσ")
+	want := []TextMatch{
+		{Line: 0, Column: 0, Length: 2},
+		{Line: 0, Column: 3, Length: 2},
+		{Line: 0, Column: 6, Length: 2},
+	}
+	if len(matches) != len(want) {
+		t.Fatalf("Greek sigma match count = %d, want %d: %#v", len(matches), len(want), matches)
+	}
+	for i := range want {
+		if matches[i] != want[i] {
+			t.Fatalf("Greek sigma match %d = %#v, want %#v", i, matches[i], want[i])
+		}
+	}
+}
+
 func TestSearchTextTreatsQueryLiterallyAndRejectsBlankInput(t *testing.T) {
 	if got := SearchText("a.b a-b", "."); len(got) != 1 || got[0].Column != 1 {
 		t.Fatalf("literal dot matches = %#v, want one match at column 1", got)

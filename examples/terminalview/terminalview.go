@@ -20,7 +20,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	title.SetFontSize(22)
 	parent.AddSubview(title)
 
-	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Find/Paste · live search counts follow appended output · Shift+Home/End jumps")
+	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Find/Paste · Unicode-folded search follows live output · Shift+Home/End jumps")
 	parent.AddSubview(hint)
 
 	terminal := uikit.NewUITerminalView(&foundation.Rect{X: 24, Y: 80, Width: 852, Height: 450})
@@ -40,8 +40,8 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	terminal.OnInput(func(data []byte) { status.SetText(fmt.Sprintf("PTY input: %q", data)) })
 	updateStatus := func() { status.SetText(fmt.Sprintf("History offset: %d rows", terminal.ScrollOffset())) }
 	terminal.ObserveTextChanged(func() {
-		if count := len(terminal.SearchText("LIVE MATCH")); count > 0 {
-			status.SetText(fmt.Sprintf("Live matches: %d", count))
+		if count := len(terminal.SearchText("οσ")); count > 0 {
+			status.SetText(fmt.Sprintf("Unicode matches: %d", count))
 		}
 	})
 	findOldest := func() {
@@ -81,7 +81,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	appendMatch.View().SetAutomationID("terminal.append-match")
 	appendMatch.OnTouchUpInside(func() {
 		liveMatchNumber++
-		terminal.Append(fmt.Sprintf("\r\n\x1b[33mLIVE MATCH %d\x1b[0m", liveMatchNumber))
+		terminal.Append(fmt.Sprintf("\r\n\x1b[33mSIGMA %d · ΟΣ / ος / οσ\x1b[0m", liveMatchNumber))
 	})
 	parent.AddSubview(appendMatch)
 	bottom := button.NewUIButton(&foundation.Rect{X: 710, Y: 544, Width: 166, Height: 36}, "Live Output")
