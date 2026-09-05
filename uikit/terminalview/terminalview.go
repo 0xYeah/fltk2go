@@ -146,6 +146,8 @@ type UITerminalView struct {
 	inputBound    bool
 	shortcuts     []terminalShortcut
 	onContextMenu func(ContextMenuState)
+	textObservers map[uint64]func()
+	nextObserver  uint64
 	stream        terminalStreamFilter
 }
 
@@ -198,7 +200,12 @@ func (t *UITerminalView) Raw() *fltk_bridge.Terminal {
 
 func (t *UITerminalView) Feed(data []byte) {
 	if t != nil && t.raw != nil {
-		t.raw.AppendBytes(t.stream.Filter(data))
+		filtered := t.stream.Filter(data)
+		if len(filtered) == 0 {
+			return
+		}
+		t.raw.AppendBytes(filtered)
+		t.notifyTextChanged()
 	}
 }
 
@@ -220,15 +227,47 @@ func (t *UITerminalView) SearchText(query string) []TextMatch {
 	return SearchText(t.Text(), query)
 }
 
+// ObserveTextChanged registers a lightweight notification for rendered text
+// mutations. It is useful for search/count surfaces that should follow live
+// terminal output without polling. The returned function is idempotent and
+// removes only this observer.
+func (t *UITerminalView) ObserveTextChanged(handler func()) func() {
+	if t == nil || handler == nil {
+		return func() {}
+	}
+	if t.textObservers == nil {
+		t.textObservers = make(map[uint64]func())
+	}
+	t.nextObserver++
+	id := t.nextObserver
+	t.textObservers[id] = handler
+	return func() { delete(t.textObservers, id) }
+}
+
+func (t *UITerminalView) notifyTextChanged() {
+	if t == nil || len(t.textObservers) == 0 {
+		return
+	}
+	observers := make([]func(), 0, len(t.textObservers))
+	for _, observer := range t.textObservers {
+		observers = append(observers, observer)
+	}
+	for _, observer := range observers {
+		observer()
+	}
+}
+
 func (t *UITerminalView) Clear() {
 	if t != nil && t.raw != nil {
 		t.raw.Clear()
+		t.notifyTextChanged()
 	}
 }
 
 func (t *UITerminalView) ClearHistory() {
 	if t != nil && t.raw != nil {
 		t.raw.ClearHistory()
+		t.notifyTextChanged()
 	}
 }
 
@@ -278,6 +317,7 @@ func (t *UITerminalView) Reset() {
 	if t != nil && t.raw != nil {
 		t.stream.Reset()
 		t.raw.Reset()
+		t.notifyTextChanged()
 	}
 }
 
@@ -316,6 +356,7 @@ func (t *UITerminalView) SetSelectionColors(foreground, background uint) {
 func (t *UITerminalView) SetHistoryRows(rows int) {
 	if t != nil && t.raw != nil && rows >= 0 {
 		t.raw.SetHistoryRows(rows)
+		t.notifyTextChanged()
 	}
 }
 

@@ -220,6 +220,39 @@ func TestTerminalSearchTextIncludesRetainedOutput(t *testing.T) {
 	}
 }
 
+func TestTerminalTextObserversTrackMutationsAndCanUnsubscribe(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	firstCalls := 0
+	secondCalls := 0
+	stopFirst := terminal.ObserveTextChanged(func() { firstCalls++ })
+	terminal.ObserveTextChanged(func() { secondCalls++ })
+
+	terminal.Append("first")
+	stopFirst()
+	stopFirst() // unsubscription is intentionally idempotent
+	terminal.Append(" second")
+	terminal.Clear()
+	terminal.ClearHistory()
+	terminal.Reset()
+
+	if firstCalls != 1 {
+		t.Fatalf("unsubscribed observer calls = %d, want 1", firstCalls)
+	}
+	if secondCalls != 5 {
+		t.Fatalf("active observer calls = %d, want 5", secondCalls)
+	}
+}
+
+func TestTerminalTextObserversIgnoreFilteredMetadataOnlyChunks(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	calls := 0
+	terminal.ObserveTextChanged(func() { calls++ })
+	terminal.Feed([]byte("\x1b]0;metadata only\x07"))
+	if calls != 0 {
+		t.Fatalf("metadata-only feed emitted %d text changes, want 0", calls)
+	}
+}
+
 func TestTerminalRevealTextMatchCentersHistoryRow(t *testing.T) {
 	terminal := NewUITerminalView(nil)
 	terminal.SetHistoryRows(200)

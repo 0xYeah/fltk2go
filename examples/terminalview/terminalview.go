@@ -20,7 +20,7 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	title.SetFontSize(22)
 	parent.AddSubview(title)
 
-	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Find/Paste · Shift+PageUp/PageDown scrolls · Shift+Home/End jumps")
+	hint := label.NewUILabel(&foundation.Rect{X: 24, Y: 48, Width: 852, Height: 24}, "Right-click for Copy/Find/Paste · live search counts follow appended output · Shift+Home/End jumps")
 	parent.AddSubview(hint)
 
 	terminal := uikit.NewUITerminalView(&foundation.Rect{X: 24, Y: 80, Width: 852, Height: 450})
@@ -39,6 +39,11 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	parent.AddSubview(status)
 	terminal.OnInput(func(data []byte) { status.SetText(fmt.Sprintf("PTY input: %q", data)) })
 	updateStatus := func() { status.SetText(fmt.Sprintf("History offset: %d rows", terminal.ScrollOffset())) }
+	terminal.ObserveTextChanged(func() {
+		if count := len(terminal.SearchText("LIVE MATCH")); count > 0 {
+			status.SetText(fmt.Sprintf("Live matches: %d", count))
+		}
+	})
 	findOldest := func() {
 		matches := terminal.SearchText("001")
 		if len(matches) == 0 {
@@ -71,9 +76,14 @@ func BuildView(parent *view.UIView) *uikit.UITerminalView {
 	top := button.NewUIButton(&foundation.Rect{X: 430, Y: 544, Width: 130, Height: 36}, "Oldest")
 	top.OnTouchUpInside(func() { terminal.ScrollToTop(); updateStatus() })
 	parent.AddSubview(top)
-	pageDown := button.NewUIButton(&foundation.Rect{X: 570, Y: 544, Width: 130, Height: 36}, "Page Down")
-	pageDown.OnTouchUpInside(func() { terminal.ScrollByRows(-max(1, terminal.Size().Rows-1)); updateStatus() })
-	parent.AddSubview(pageDown)
+	liveMatchNumber := 0
+	appendMatch := button.NewUIButton(&foundation.Rect{X: 570, Y: 544, Width: 130, Height: 36}, "Append Match")
+	appendMatch.View().SetAutomationID("terminal.append-match")
+	appendMatch.OnTouchUpInside(func() {
+		liveMatchNumber++
+		terminal.Append(fmt.Sprintf("\r\n\x1b[33mLIVE MATCH %d\x1b[0m", liveMatchNumber))
+	})
+	parent.AddSubview(appendMatch)
 	bottom := button.NewUIButton(&foundation.Rect{X: 710, Y: 544, Width: 166, Height: 36}, "Live Output")
 	bottom.OnTouchUpInside(func() { terminal.ScrollToBottom(); updateStatus() })
 	parent.AddSubview(bottom)
