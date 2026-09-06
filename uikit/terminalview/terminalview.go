@@ -1,8 +1,10 @@
 package terminalview
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/0xdevelop/fltk2go/fltk_bridge"
 	"github.com/0xdevelop/fltk2go/foundation"
@@ -42,8 +44,9 @@ type TextMatch struct {
 // TextSearchOptions controls terminal retained-output matching. The zero value
 // preserves SearchText's Unicode-aware case-insensitive behavior.
 type TextSearchOptions struct {
-	CaseSensitive bool
-	WholeWord     bool
+	CaseSensitive     bool
+	WholeWord         bool
+	RegularExpression bool
 }
 
 // SearchText returns every non-overlapping literal match in display order.
@@ -59,6 +62,9 @@ func SearchText(text, query string) []TextMatch {
 func SearchTextWithOptions(text, query string, options TextSearchOptions) []TextMatch {
 	if strings.TrimSpace(query) == "" {
 		return nil
+	}
+	if options.RegularExpression {
+		return searchTextRegularExpression(text, query, options)
 	}
 	needle := []rune(query)
 	if len(needle) == 0 {
@@ -82,6 +88,45 @@ func SearchTextWithOptions(text, query string, options TextSearchOptions) []Text
 		}
 	}
 	return matches
+}
+
+// ValidateTextSearchQuery reports whether a query is valid for the requested
+// search mode. Literal queries are always valid; blank regular expressions are
+// treated as an empty search to match SearchTextWithOptions.
+func ValidateTextSearchQuery(query string, options TextSearchOptions) error {
+	if !options.RegularExpression || strings.TrimSpace(query) == "" {
+		return nil
+	}
+	_, err := compileTextSearchRegexp(query, options.CaseSensitive)
+	return err
+}
+
+func searchTextRegularExpression(text, query string, options TextSearchOptions) []TextMatch {
+	expression, err := compileTextSearchRegexp(query, options.CaseSensitive)
+	if err != nil {
+		return nil
+	}
+	var matches []TextMatch
+	for lineIndex, line := range strings.Split(text, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		runes := []rune(line)
+		for _, location := range expression.FindAllStringIndex(line, -1) {
+			column := utf8.RuneCountInString(line[:location[0]])
+			length := utf8.RuneCountInString(line[location[0]:location[1]])
+			if options.WholeWord && !hasWordBoundaries(runes, column, length) {
+				continue
+			}
+			matches = append(matches, TextMatch{Line: lineIndex, Column: column, Length: length})
+		}
+	}
+	return matches
+}
+
+func compileTextSearchRegexp(query string, caseSensitive bool) (*regexp.Regexp, error) {
+	if !caseSensitive {
+		query = "(?i:" + query + ")"
+	}
+	return regexp.Compile(query)
 }
 
 func hasWordBoundaries(text []rune, start, length int) bool {

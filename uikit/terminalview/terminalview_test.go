@@ -260,6 +260,56 @@ func TestSearchTextWithOptionsSupportsWholeWordMatching(t *testing.T) {
 	}
 }
 
+func TestSearchTextWithOptionsSupportsRegularExpressions(t *testing.T) {
+	matches := SearchTextWithOptions(
+		"error-42 ERROR-7 error-x\n编号-１２",
+		`error-\d+`,
+		TextSearchOptions{RegularExpression: true},
+	)
+	want := []TextMatch{
+		{Line: 0, Column: 0, Length: 8},
+		{Line: 0, Column: 9, Length: 7},
+	}
+	if len(matches) != len(want) {
+		t.Fatalf("regular-expression match count = %d, want %d: %#v", len(matches), len(want), matches)
+	}
+	for i := range want {
+		if matches[i] != want[i] {
+			t.Fatalf("regular-expression match %d = %#v, want %#v", i, matches[i], want[i])
+		}
+	}
+
+	exact := SearchTextWithOptions("Error-42 error-42", `error-\d+`, TextSearchOptions{
+		CaseSensitive:     true,
+		RegularExpression: true,
+	})
+	if len(exact) != 1 || exact[0].Column != 9 {
+		t.Fatalf("case-sensitive regular-expression matches = %#v, want column 9", exact)
+	}
+
+	whole := SearchTextWithOptions("cat42 scatter42 cat-42", `cat\d+`, TextSearchOptions{
+		WholeWord:         true,
+		RegularExpression: true,
+	})
+	if len(whole) != 1 || whole[0].Column != 0 {
+		t.Fatalf("whole-word regular-expression matches = %#v, want only cat42", whole)
+	}
+
+	unicodeMatch := SearchTextWithOptions("前缀 编号-１２ 后缀", `编号-\p{N}+`, TextSearchOptions{RegularExpression: true})
+	if len(unicodeMatch) != 1 || unicodeMatch[0] != (TextMatch{Line: 0, Column: 3, Length: 5}) {
+		t.Fatalf("Unicode regular-expression coordinates = %#v, want rune column 3 length 5", unicodeMatch)
+	}
+}
+
+func TestValidateTextSearchQueryRejectsInvalidRegularExpression(t *testing.T) {
+	if err := ValidateTextSearchQuery("[", TextSearchOptions{RegularExpression: true}); err == nil {
+		t.Fatal("invalid regular expression was accepted")
+	}
+	if err := ValidateTextSearchQuery("[", TextSearchOptions{}); err != nil {
+		t.Fatalf("literal query must not be parsed as a regular expression: %v", err)
+	}
+}
+
 func TestSearchTextTreatsQueryLiterallyAndRejectsBlankInput(t *testing.T) {
 	if got := SearchText("a.b a-b", "."); len(got) != 1 || got[0].Column != 1 {
 		t.Fatalf("literal dot matches = %#v, want one match at column 1", got)

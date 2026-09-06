@@ -186,6 +186,12 @@ func NewUITerminalView(r *foundation.Rect) *UITerminalView {
 	return terminalview.NewUITerminalView(r)
 }
 
+// ValidateTerminalTextSearchQuery reports whether a query is valid for the
+// requested terminal search mode.
+func ValidateTerminalTextSearchQuery(query string, options TerminalTextSearchOptions) error {
+	return terminalview.ValidateTextSearchQuery(query, options)
+}
+
 func Message(title, message string) {
 	dialog.Message(title, message)
 }
