@@ -170,6 +170,9 @@ func TestTerminalClipboardCommandsAreSafeWithoutSelection(t *testing.T) {
 	if terminal.HasSelection() {
 		t.Fatal("new terminal unexpectedly has a selection")
 	}
+	if got := terminal.SelectedText(); got != "" {
+		t.Fatalf("new terminal selected text = %q, want empty", got)
+	}
 	if terminal.CopySelection() {
 		t.Fatal("copy without a selection must report no action")
 	}

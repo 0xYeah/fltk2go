@@ -365,19 +365,26 @@ func (t *UITerminalView) ClearHistory() {
 	}
 }
 
+// SelectedText returns the current native terminal selection without modifying
+// either the selection or clipboard. Applications can use it to seed search or
+// other read-only workflows while selection ownership stays in this component.
+func (t *UITerminalView) SelectedText() string {
+	if t == nil || t.raw == nil {
+		return ""
+	}
+	return t.raw.SelectedText()
+}
+
 // HasSelection reports whether the native terminal currently has selected
 // text. It does not expose the complete scrollback buffer.
 func (t *UITerminalView) HasSelection() bool {
-	return t != nil && t.raw != nil && t.raw.SelectedText() != ""
+	return t.SelectedText() != ""
 }
 
 // CopySelection copies only the current native terminal selection. It returns
 // false when there is no selection, allowing menu actions to remain no-ops.
 func (t *UITerminalView) CopySelection() bool {
-	if t == nil || t.raw == nil {
-		return false
-	}
-	selected := t.raw.SelectedText()
+	selected := t.SelectedText()
 	if selected == "" {
 		return false
 	}
