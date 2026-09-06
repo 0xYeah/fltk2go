@@ -87,7 +87,7 @@ func TestInputNavigationMapsNativeSearchKeys(t *testing.T) {
 		{key: fltk_bridge.ESCAPE, want: NavigationCancel, handled: false},
 	}
 	for _, test := range tests {
-		if got := in.dispatchNavigation(test.key); got != test.handled {
+		if got := in.dispatchNavigation(test.key, 0); got != test.handled {
 			t.Fatalf("dispatchNavigation(%d) = %v, want %v", test.key, got, test.handled)
 		}
 	}
@@ -101,6 +101,26 @@ func TestInputNavigationMapsNativeSearchKeys(t *testing.T) {
 	}
 }
 
+func TestInputNavigationMapsFindAgainKeys(t *testing.T) {
+	in := New(0, 0, 120, 24, "Search")
+	var actions []NavigationAction
+	in.OnNavigation(func(action NavigationAction) bool {
+		actions = append(actions, action)
+		return true
+	})
+
+	if !in.dispatchNavigation(fltk_bridge.F3, 0) {
+		t.Fatal("F3 must dispatch next navigation")
+	}
+	if !in.dispatchNavigation(fltk_bridge.F3, fltk_bridge.SHIFT) {
+		t.Fatal("Shift+F3 must dispatch previous navigation")
+	}
+	want := []NavigationAction{NavigationNext, NavigationPrevious}
+	if len(actions) != len(want) || actions[0] != want[0] || actions[1] != want[1] {
+		t.Fatalf("find-again actions = %#v, want %#v", actions, want)
+	}
+}
+
 func TestInputNavigationLeavesTextEditingKeysNative(t *testing.T) {
 	in := New(0, 0, 120, 24, "Search")
 	calls := 0
@@ -109,7 +129,7 @@ func TestInputNavigationLeavesTextEditingKeysNative(t *testing.T) {
 		return true
 	})
 
-	if in.dispatchNavigation('x') {
+	if in.dispatchNavigation('x', 0) {
 		t.Fatal("ordinary text key must remain available to native input")
 	}
 	if calls != 0 {

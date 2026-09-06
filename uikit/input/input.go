@@ -212,20 +212,21 @@ func (in *Input) OnChange(callback func()) {
 	}
 }
 
-// OnNavigation routes Enter, Down, Up and Escape through one native-input
-// callback. Return true when the owner handled the command, or false to let the
-// underlying input retain its normal behavior.
+// OnNavigation routes Enter, Down, Up, Escape, F3 and Shift+F3 through one
+// native-input callback. F3 follows the conventional find-again direction:
+// next without Shift and previous with Shift. Return true when the owner handled
+// the command, or false to let the underlying input retain its normal behavior.
 func (in *Input) OnNavigation(callback func(NavigationAction) bool) {
 	if in == nil {
 		return
 	}
 	in.onNavigation = callback
 	in.v.On(fltk_bridge.KEYDOWN, func(fltk_bridge.Event) bool {
-		return in.dispatchNavigation(fltk_bridge.EventKey())
+		return in.dispatchNavigation(fltk_bridge.EventKey(), fltk_bridge.EventState())
 	})
 }
 
-func (in *Input) dispatchNavigation(key int) bool {
+func (in *Input) dispatchNavigation(key, state int) bool {
 	if in == nil || in.onNavigation == nil {
 		return false
 	}
@@ -239,6 +240,12 @@ func (in *Input) dispatchNavigation(key int) bool {
 		action = NavigationPrevious
 	case fltk_bridge.ESCAPE:
 		action = NavigationCancel
+	case fltk_bridge.F3:
+		if state&fltk_bridge.SHIFT != 0 {
+			action = NavigationPrevious
+		} else {
+			action = NavigationNext
+		}
 	default:
 		return false
 	}
