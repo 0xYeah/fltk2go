@@ -20,13 +20,15 @@ const (
 // Display-oriented CSI sequences remain byte-for-byte intact. State survives
 // arbitrary PTY chunk boundaries.
 type terminalStreamFilter struct {
-	state terminalStreamState
-	csi   []byte
+	state          terminalStreamState
+	csi            []byte
+	bracketedPaste bool
 }
 
 func (f *terminalStreamFilter) Reset() {
 	f.state = terminalStreamText
 	f.csi = f.csi[:0]
+	f.bracketedPaste = false
 }
 
 func (f *terminalStreamFilter) Filter(data []byte) []byte {
@@ -56,6 +58,7 @@ func (f *terminalStreamFilter) Filter(data []byte) []byte {
 		case terminalStreamCSI:
 			f.csi = append(f.csi, b)
 			if b >= 0x40 && b <= 0x7e {
+				f.trackPrivateMode(f.csi)
 				if !isUnsupportedPrivateMode(f.csi) {
 					out = append(out, f.csi...)
 				}
@@ -81,6 +84,40 @@ func (f *terminalStreamFilter) Filter(data []byte) []byte {
 		}
 	}
 	return out
+}
+
+func (f *terminalStreamFilter) trackPrivateMode(sequence []byte) {
+	if !privateModeContains(sequence, 2004) {
+		return
+	}
+	switch sequence[len(sequence)-1] {
+	case 'h':
+		f.bracketedPaste = true
+	case 'l':
+		f.bracketedPaste = false
+	}
+}
+
+func privateModeContains(sequence []byte, wanted int) bool {
+	if len(sequence) < 5 || sequence[0] != terminalEscape || sequence[1] != '[' || sequence[2] != '?' {
+		return false
+	}
+	value, hasDigit := 0, false
+	for _, b := range sequence[3 : len(sequence)-1] {
+		switch {
+		case b >= '0' && b <= '9':
+			value = value*10 + int(b-'0')
+			hasDigit = true
+		case b == ';':
+			if hasDigit && value == wanted {
+				return true
+			}
+			value, hasDigit = 0, false
+		default:
+			return false
+		}
+	}
+	return hasDigit && value == wanted
 }
 
 func isUnsupportedPrivateMode(sequence []byte) bool {

@@ -408,10 +408,24 @@ func (t *UITerminalView) CopyAllText() bool {
 
 // PasteClipboard requests the system clipboard and delivers it through the
 // same OnInput path used by the native Ctrl+Shift+V and Shift+Insert actions.
+// When the attached shell advertises DEC private mode 2004, pasted bytes are
+// bracketed so multiline text remains an editable shell buffer instead of
+// executing line-by-line.
 func (t *UITerminalView) PasteClipboard() {
 	if t != nil && t.raw != nil {
 		t.raw.PasteClipboard()
 	}
+}
+
+func (t *UITerminalView) preparePaste(data []byte) []byte {
+	if t == nil || len(data) == 0 || !t.stream.bracketedPaste {
+		return data
+	}
+	wrapped := make([]byte, 0, len(data)+12)
+	wrapped = append(wrapped, "\x1b[200~"...)
+	wrapped = append(wrapped, data...)
+	wrapped = append(wrapped, "\x1b[201~"...)
+	return wrapped
 }
 
 func (t *UITerminalView) Reset() {
@@ -626,7 +640,7 @@ func (t *UITerminalView) OnInput(handler func([]byte)) {
 		if t.onInput == nil || fltk_bridge.EventText() == "" {
 			return false
 		}
-		t.onInput([]byte(fltk_bridge.EventText()))
+		t.onInput(t.preparePaste([]byte(fltk_bridge.EventText())))
 		return true
 	})
 }

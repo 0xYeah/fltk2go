@@ -35,6 +35,45 @@ func TestTerminalStreamFilterHandlesSplitEscapeTerminators(t *testing.T) {
 	}
 }
 
+func TestTerminalStreamFilterTracksBracketedPasteModeAcrossChunks(t *testing.T) {
+	filter := terminalStreamFilter{}
+	var got []byte
+	for _, chunk := range [][]byte{[]byte("ready\x1b[?20"), []byte("04h"), []byte(" prompt")} {
+		got = append(got, filter.Filter(chunk)...)
+	}
+	if string(got) != "ready prompt" {
+		t.Fatalf("filtered bracketed-paste stream = %q, want visible text only", got)
+	}
+	if !filter.bracketedPaste {
+		t.Fatal("split CSI ?2004h did not enable bracketed paste")
+	}
+
+	filter.Filter([]byte("\x1b[?1;2004l"))
+	if filter.bracketedPaste {
+		t.Fatal("private-mode list containing 2004 did not disable bracketed paste")
+	}
+}
+
+func TestTerminalPreparePasteWrapsOnlyWhileBracketedPasteIsEnabled(t *testing.T) {
+	terminal := NewUITerminalView(nil)
+	payload := []byte("printf 'first'\nprintf 'second'")
+	if got := terminal.preparePaste(payload); !bytes.Equal(got, payload) {
+		t.Fatalf("ordinary paste = %q, want %q", got, payload)
+	}
+
+	terminal.Feed([]byte("\x1b[?2004h"))
+	want := append([]byte("\x1b[200~"), payload...)
+	want = append(want, []byte("\x1b[201~")...)
+	if got := terminal.preparePaste(payload); !bytes.Equal(got, want) {
+		t.Fatalf("bracketed paste = %q, want %q", got, want)
+	}
+
+	terminal.Reset()
+	if got := terminal.preparePaste(payload); !bytes.Equal(got, payload) {
+		t.Fatalf("paste after reset = %q, want unwrapped payload", got)
+	}
+}
+
 func TestEncodeKeyPreservesTerminalControlSemantics(t *testing.T) {
 	tests := []struct {
 		name    string
